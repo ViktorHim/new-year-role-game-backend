@@ -37,6 +37,7 @@ func main() {
 		{
 			playerHandler := handlers.NewPlayerHandler(db)
 			protected.GET("/player/me", playerHandler.GetPlayerInfo)
+			protected.GET("/player/balance", playerHandler.GetPlayerBalance)
 		}
 	}
 

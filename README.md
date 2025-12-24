@@ -2,24 +2,65 @@
 
 Это серверная часть для сайта новогодней ролевой игры
 
-internal - вся логика
+POST /api/auth/login - авторизация:
+Запрос:
+```
+{
+    "username": "your_usertname_here",
+    "password": "your_password_here"
+}
+```
+Ответ:
+```
+{
+    "token": "your_jwt_token_here",
+    "user": {
+        "id": "user_id",
+        "username": "username",
+        "player_id": "player_id",
+        "is_admin": "is_admin"
+    }
+}
+```
 
-internal/app - запуск
+GET /player/me - информация об игроке
+Запрос:
+```
+Header "Authorization": "Bearer <jwt_token_here>"
+{}
+```
+Ответ:
+```
+{
+    "id": id,
+    "name": "name",
+    "role": "role",
+    faction_id: faction_id,
+    "can_change_faction": true/false,
+    "description": "description",
+    "info_about_players": [
+        "Info 1",
+        "info 2",
+        <etc>
+    ],
+    "avatar": "<image in base64 here>"
+}
+```
 
-internal/config - конфиги
 
-internal/http - хендлеры, маршруты
-
-internal/domain - сущности
-
-internal/service - use-cases
-
-internal/repository - интерфейсы + реализация доступа к данным
-
-internal/storage
-
-handler -> service -> repository (interface)
-
+/player/balance - баланс игрока
+Запрос:
+```
+Header "Authorization": "Bearer <jwt_token_here>"
+{}
+```
+Ответ:
+```
+{
+    "money": money,
+    "influence": influence
+}
+```
 
 
 

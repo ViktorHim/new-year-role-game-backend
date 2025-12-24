@@ -4,7 +4,6 @@ package models
 type User struct {
 	ID       int    `json:"id"`
 	Username string `json:"username"`
-	Password string `json:"-"`
 	PlayerID *int   `json:"player_id,omitempty"`
 	IsAdmin  bool   `json:"is_admin"`
 }
