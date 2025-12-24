@@ -1,0 +1,40 @@
+touch .dockerignore
+```
+
+Содержимое `.dockerignore`:
+```
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Build artifacts
+bin/
+dist/
+*.exe
+
+# Tests
+*_test.go
+*.test
+coverage.out
+
+# Documentation
+README.md
+docs/
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db

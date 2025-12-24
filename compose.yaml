@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  postgres:
+    restart: always
+    env_file:
+      - .env
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    restart: on-failure
+    build: ./
+    command: ./api
+    depends_on:
+      - postgres
+    ports:
+      - 8080:8080
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
