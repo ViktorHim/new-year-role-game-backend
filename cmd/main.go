@@ -38,6 +38,11 @@ func main() {
 			playerHandler := handlers.NewPlayerHandler(db)
 			protected.GET("/player/me", playerHandler.GetPlayerInfo)
 			protected.GET("/player/balance", playerHandler.GetPlayerBalance)
+
+			factionHandler := handlers.NewFactionHandler(db)
+			protected.GET("/player/faction", factionHandler.GetPlayerFaction)
+			protected.GET("/factions", factionHandler.GetAllFactions)
+			protected.PUT("/player/faction", factionHandler.ChangeFaction)
 		}
 	}
 
