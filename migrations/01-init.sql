@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS factions (
     description TEXT,
     faction_influence INTEGER DEFAULT 0, -- очки самой фракции (не игроков)
     is_composition_visible_to_all BOOLEAN DEFAULT false,
-    leader_player_id INTEGER, -- будет добавлен FK после создания players
+    leader_player_id INTEGER -- будет добавлен FK после создания players
 );
 
 -- Игроки
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS players (
     influence INTEGER DEFAULT 0,
     faction_id INTEGER REFERENCES factions(id) ON DELETE SET NULL,
     can_change_faction BOOLEAN DEFAULT false,
-    avatar TEXT, -- изображение в base64
+    avatar TEXT -- изображение в base64
 );
 
 -- информация, доступная игроку о других
@@ -577,7 +577,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
-    is_admin BOOLEAN DEFAULT false,
+    is_admin BOOLEAN DEFAULT false
 );
 
 -- Индекс для быстрого поиска по username
