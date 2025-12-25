@@ -48,6 +48,11 @@ func main() {
 			protected.GET("/player/goals", goalHandler.GetPersonalGoals)
 			protected.GET("/player/faction/goals", goalHandler.GetFactionGoals)
 			protected.PUT("/goals/:id/toggle", goalHandler.ToggleGoalCompletion)
+
+			itemHandler := handlers.NewItemHandler(db)
+			protected.GET("/player/inventory", itemHandler.GetPlayerInventory)
+			protected.POST("/player/transfer/item", itemHandler.TransferItem)
+			protected.POST("/player/transfer/money", itemHandler.TransferMoney)
 		}
 	}
 
