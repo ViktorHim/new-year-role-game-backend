@@ -8,7 +8,7 @@
 -- ОСНОВНЫЕ ТАБЛИЦЫ
 -- ============================================
 
--- Фракции
+-- Фракции¸
 CREATE TABLE IF NOT EXISTS factions (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS factions (
     leader_player_id INTEGER -- будет добавлен FK после создания players
 );
 
--- Игроки
+-- Игроки¸
 CREATE TABLE IF NOT EXISTS players (
     id SERIAL PRIMARY KEY,
     character_name VARCHAR(255) NOT NULL,
@@ -44,7 +44,7 @@ ALTER TABLE factions
 ADD CONSTRAINT fk_leader_player 
 FOREIGN KEY (leader_player_id) REFERENCES players(id) ON DELETE SET NULL;
 
--- Вещи (предметы)
+-- Ð’ÐµÑ‰Ð¸ (Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹)
 CREATE TABLE IF NOT EXISTS items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Эффекты вещей
+-- Вещи (предметы)
 CREATE TABLE IF NOT EXISTS effects (
     id SERIAL PRIMARY KEY,
     description TEXT,
@@ -180,15 +180,64 @@ CREATE TABLE IF NOT EXISTS goals (
     )
 );
 
+
 -- Зависимости целей друг от друга (скрытые цели)
+-- ОБНОВЛЕНО: Теперь поддерживает зависимость от влияния других игроков
 CREATE TABLE IF NOT EXISTS goal_dependencies (
     id SERIAL PRIMARY KEY,
-    goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE, -- эта цель
-    required_goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE, -- требует выполнения этой
-    is_visible_before_completion BOOLEAN DEFAULT true, -- false для "скрытых" целей
+    goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE, -- эта цель зависит от...
+    
+    -- Тип зависимости
+    dependency_type VARCHAR(30) NOT NULL, -- 'goal_completion' или 'influence_threshold'
+    
+    -- Для зависимости от выполнения другой цели
+    required_goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+    
+    -- Для зависимости от очков влияния другого игрока
+    influence_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+    required_influence_points INTEGER,
+    
+    -- Видимость до выполнения условия
+    is_visible_before_completion BOOLEAN DEFAULT false, -- false = полностью скрыта; true = видна, но заблокирована
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(goal_id, required_goal_id),
-    CHECK (goal_id != required_goal_id) -- цель не может зависеть от самой себя
+    
+    -- Проверки целостности данных
+    CHECK (
+        -- Для типа 'goal_completion' должен быть указан required_goal_id
+        (dependency_type = 'goal_completion' AND 
+         required_goal_id IS NOT NULL AND 
+         influence_player_id IS NULL AND 
+         required_influence_points IS NULL) OR
+        -- Для типа 'influence_threshold' должны быть указаны influence_player_id и required_influence_points
+        (dependency_type = 'influence_threshold' AND 
+         required_goal_id IS NULL AND 
+         influence_player_id IS NOT NULL AND 
+         required_influence_points IS NOT NULL AND
+         required_influence_points > 0)
+    ),
+    
+    -- Цель не может зависеть от самой себя
+    CHECK (goal_id != required_goal_id),
+    
+    -- Уникальность зависимостей
+    UNIQUE(goal_id, dependency_type, required_goal_id),
+    UNIQUE(goal_id, dependency_type, influence_player_id)
+);
+
+-- История разблокировок зависимостей целей
+-- Когда зависимость разблокируется (цель выполнена или порог влияния достигнут),
+-- запись добавляется в эту таблицу и остаётся там навсегда
+-- Это гарантирует, что цель остаётся доступной даже если условие перестало выполняться
+CREATE TABLE IF NOT EXISTS goal_dependency_unlocks (
+    id SERIAL PRIMARY KEY,
+    goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
+    dependency_id INTEGER REFERENCES goal_dependencies(id) ON DELETE CASCADE,
+    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- владелец цели
+    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Одна зависимость может быть разблокирована только один раз для одной цели
+    UNIQUE(goal_id, dependency_id)
 );
 
 -- История выполнения целей (для отслеживания начисления/снятия очков влияния)
@@ -476,7 +525,9 @@ FROM factions f
 LEFT JOIN players p ON p.faction_id = f.id
 GROUP BY f.id, f.name, f.faction_influence;
 
+
 -- Представление для видимых целей игрока
+-- ОБНОВЛЕНО: Учитывает разблокировки из goal_dependency_unlocks
 CREATE OR REPLACE VIEW player_visible_goals AS
 SELECT 
     g.id,
@@ -485,15 +536,69 @@ SELECT
     g.player_id,
     g.influence_points_reward,
     g.is_completed,
+    -- Определяем видимость цели
     CASE 
-        WHEN gd.id IS NULL THEN true -- нет зависимостей
-        WHEN gd.is_visible_before_completion = true THEN true -- видна до выполнения
-        WHEN required_goal.is_completed = true THEN true -- требуемая цель выполнена
+        -- Если нет зависимостей - цель видна
+        WHEN NOT EXISTS (
+            SELECT 1 FROM goal_dependencies gd WHERE gd.goal_id = g.id
+        ) THEN true
+        
+        -- Если есть зависимость с is_visible_before_completion = true - цель видна (но может быть заблокирована)
+        WHEN EXISTS (
+            SELECT 1 FROM goal_dependencies gd 
+            WHERE gd.goal_id = g.id 
+            AND gd.is_visible_before_completion = true
+        ) THEN true
+        
+        -- Проверяем, выполнены ли ВСЕ условия зависимости (с учетом unlocks!)
+        WHEN NOT EXISTS (
+            SELECT 1 FROM goal_dependencies gd
+            LEFT JOIN goals rg ON gd.required_goal_id = rg.id
+            LEFT JOIN players p ON gd.influence_player_id = p.id
+            LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
+            WHERE gd.goal_id = g.id 
+            AND gdu.id IS NULL  -- Зависимость ещё не разблокирована
+            AND (
+                -- Зависимость от цели не выполнена
+                (gd.dependency_type = 'goal_completion' AND (rg.is_completed = false OR rg.is_completed IS NULL))
+                OR
+                -- Зависимость от очков влияния не выполнена
+                (gd.dependency_type = 'influence_threshold' AND (p.influence < gd.required_influence_points OR p.influence IS NULL))
+            )
+        ) THEN true
+        
+        -- Иначе цель скрыта
         ELSE false
-    END AS is_visible
+    END AS is_visible,
+    
+    -- Определяем, заблокирована ли цель (видна, но не может быть выполнена)
+    CASE 
+        -- Если нет зависимостей - цель доступна
+        WHEN NOT EXISTS (
+            SELECT 1 FROM goal_dependencies gd WHERE gd.goal_id = g.id
+        ) THEN false
+        
+        -- Проверяем, есть ли невыполненные и неразблокированные зависимости
+        WHEN EXISTS (
+            SELECT 1 FROM goal_dependencies gd
+            LEFT JOIN goals rg ON gd.required_goal_id = rg.id
+            LEFT JOIN players p ON gd.influence_player_id = p.id
+            LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
+            WHERE gd.goal_id = g.id 
+            AND gdu.id IS NULL  -- Зависимость ещё не разблокирована
+            AND (
+                -- Зависимость от цели не выполнена
+                (gd.dependency_type = 'goal_completion' AND (rg.is_completed = false OR rg.is_completed IS NULL))
+                OR
+                -- Зависимость от очков влияния не выполнена
+                (gd.dependency_type = 'influence_threshold' AND (p.influence < gd.required_influence_points OR p.influence IS NULL))
+            )
+        ) THEN true
+        
+        -- Все условия выполнены или разблокированы - цель доступна
+        ELSE false
+    END AS is_locked
 FROM goals g
-LEFT JOIN goal_dependencies gd ON g.id = gd.goal_id
-LEFT JOIN goals required_goal ON gd.required_goal_id = required_goal.id
 WHERE g.goal_type = 'personal';
 
 -- Представление для активных договоров
@@ -586,3 +691,90 @@ CREATE INDEX idx_users_username ON users(username);
 COMMENT ON TABLE users IS 'Пользователи системы для авторизации';
 COMMENT ON COLUMN users.player_id IS 'Связь с персонажем игрока (может быть NULL для админов без персонажа)';
 COMMENT ON COLUMN users.is_admin IS 'Флаг администратора системы';
+-- Дополнительные индексы для новых таблиц зависимостей
+CREATE INDEX idx_goal_dependencies_goal ON goal_dependencies(goal_id);
+CREATE INDEX idx_goal_dependencies_required_goal ON goal_dependencies(required_goal_id);
+CREATE INDEX idx_goal_dependencies_influence_player ON goal_dependencies(influence_player_id);
+CREATE INDEX idx_goal_dependencies_type ON goal_dependencies(dependency_type);
+
+CREATE INDEX idx_goal_dependency_unlocks_goal ON goal_dependency_unlocks(goal_id);
+CREATE INDEX idx_goal_dependency_unlocks_dependency ON goal_dependency_unlocks(dependency_id);
+CREATE INDEX idx_goal_dependency_unlocks_player ON goal_dependency_unlocks(player_id);
+
+-- ============================================
+-- ТРИГГЕРЫ ДЛЯ АВТОМАТИЧЕСКОЙ РАЗБЛОКИРОВКИ
+-- ============================================
+
+-- Функция для автоматической разблокировки зависимостей при изменении влияния
+CREATE OR REPLACE FUNCTION unlock_goal_dependencies_on_influence_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Когда у игрока меняется influence, проверяем все зависимости от его влияния
+    INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id)
+    SELECT 
+        gd.goal_id,
+        gd.id,
+        g.player_id
+    FROM goal_dependencies gd
+    JOIN goals g ON gd.goal_id = g.id
+    LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
+    WHERE gd.dependency_type = 'influence_threshold'
+        AND gd.influence_player_id = NEW.id
+        AND NEW.influence >= gd.required_influence_points
+        AND gdu.id IS NULL  -- Ещё не разблокировано
+    ON CONFLICT (goal_id, dependency_id) DO NOTHING;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Триггер для автоматической разблокировки при изменении влияния
+DROP TRIGGER IF EXISTS trigger_unlock_on_influence_change ON players;
+CREATE TRIGGER trigger_unlock_on_influence_change
+    AFTER UPDATE OF influence ON players
+    FOR EACH ROW
+    WHEN (OLD.influence IS DISTINCT FROM NEW.influence)
+    EXECUTE FUNCTION unlock_goal_dependencies_on_influence_change();
+
+-- Функция для автоматической разблокировки зависимостей при выполнении целей
+CREATE OR REPLACE FUNCTION unlock_goal_dependencies_on_goal_completion()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Когда цель выполняется, разблокируем все зависимости от неё
+    INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id)
+    SELECT 
+        gd.goal_id,
+        gd.id,
+        g.player_id
+    FROM goal_dependencies gd
+    JOIN goals g ON gd.goal_id = g.id
+    LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
+    WHERE gd.dependency_type = 'goal_completion'
+        AND gd.required_goal_id = NEW.id
+        AND NEW.is_completed = true
+        AND gdu.id IS NULL  -- Ещё не разблокировано
+    ON CONFLICT (goal_id, dependency_id) DO NOTHING;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Триггер для автоматической разблокировки при выполнении целей
+DROP TRIGGER IF EXISTS trigger_unlock_on_goal_completion ON goals;
+CREATE TRIGGER trigger_unlock_on_goal_completion
+    AFTER UPDATE OF is_completed ON goals
+    FOR EACH ROW
+    WHEN (OLD.is_completed IS DISTINCT FROM NEW.is_completed AND NEW.is_completed = true)
+    EXECUTE FUNCTION unlock_goal_dependencies_on_goal_completion();
+
+-- ============================================
+-- ДОПОЛНИТЕЛЬНЫЕ КОММЕНТАРИИ К НОВЫМ ТАБЛИЦАМ
+-- ============================================
+
+COMMENT ON TABLE goal_dependencies IS 'Зависимости целей от выполнения других целей или от количества очков влияния других игроков. Поддерживает множественные зависимости.';
+COMMENT ON TABLE goal_dependency_unlocks IS 'История разблокировок зависимостей - разблокированная зависимость остаётся разблокированной навсегда, даже если условие перестало выполняться';
+COMMENT ON COLUMN goal_dependencies.dependency_type IS 'Тип зависимости: goal_completion (от выполнения цели) или influence_threshold (от порога влияния)';
+COMMENT ON COLUMN goal_dependencies.is_visible_before_completion IS 'false = цель полностью скрыта до выполнения условия; true = цель видна, но отмечена как заблокированная';
+COMMENT ON COLUMN goal_dependency_unlocks.unlocked_at IS 'Время когда зависимость была разблокирована. После этого цель остаётся доступной навсегда.';
+COMMENT ON VIEW player_visible_goals IS 'Представление для определения видимости и доступности личных целей с учётом постоянных разблокировок';
+COMMENT ON COLUMN player_visible_goals.is_locked IS 'true = цель видна, но заблокирована (есть невыполненные зависимости); false = цель доступна для выполнения';

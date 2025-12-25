@@ -43,6 +43,11 @@ func main() {
 			protected.GET("/player/faction", factionHandler.GetPlayerFaction)
 			protected.GET("/factions", factionHandler.GetAllFactions)
 			protected.PUT("/player/faction", factionHandler.ChangeFaction)
+
+			goalHandler := handlers.NewGoalHandler(db)
+			protected.GET("/player/goals", goalHandler.GetPersonalGoals)
+			protected.GET("/player/faction/goals", goalHandler.GetFactionGoals)
+			protected.PUT("/goals/:id/toggle", goalHandler.ToggleGoalCompletion)
 		}
 	}
 

@@ -171,62 +171,197 @@ INSERT INTO abilities (player_id, name, description, ability_type, cooldown_minu
 
 -- Личные цели
 INSERT INTO goals (title, description, goal_type, influence_points_reward, player_id, faction_id, is_completed) VALUES
--- Цели короля
+-- Цели короля (ID 1-5)
 ('Укрепить королевство', 'Заключить 3 выгодных договора', 'personal', 30, 1, NULL, false),
-('Найти наследника', 'Определить достойного преемника престола', 'personal', 50, 1, NULL, false),
+('Разобраться с коррупцией', 'Найти и наказать коррумпированных чиновников', 'personal', 25, 1, NULL, false),
+('Провести реформы', 'Модернизировать систему управления', 'personal', 35, 1, NULL, false),
+('Нейтрализовать угрозу', 'Остановить растущее влияние мафии', 'personal', 50, 1, NULL, false), -- Будет скрыта до набора влияния Доном
+('Объединить королевство', 'Достичь мира со всеми фракциями', 'personal', 100, 1, NULL, false), -- Финальная цель короля
 
--- Цели дона
-('Расширить влияние', 'Получить контроль над торговым кварталом', 'personal', 40, 4, NULL, false),
-('Устранить конкурентов', 'Нейтрализовать влияние других криминальных группировок', 'personal', 35, 4, NULL, false),
+-- Цели принцессы (ID 6-8)
+('Изучить древнюю магию', 'Найти и прочитать запретные книги', 'personal', 20, 2, NULL, false),
+('Получить благословение', 'Заручиться поддержкой церкви', 'personal', 25, 2, NULL, false),
+('Раскрыть заговор', 'Узнать кто плетет интриги против трона', 'personal', 40, 2, NULL, false), -- Зависит от выполнения предыдущей
 
--- Цели купца
-('Монополия на специи', 'Стать единственным поставщиком экзотических товаров', 'personal', 45, 7, NULL, false),
+-- Цели советника (ID 9-10)
+('Разгадать пророчество', 'Интерпретировать древнее предсказание', 'personal', 30, 3, NULL, false),
+('Защитить короля', 'Обеспечить безопасность правителя', 'personal', 35, 3, NULL, false),
 
--- Цели доктора
-('Вылечить эпидемию', 'Создать лекарство от неизвестной болезни', 'personal', 40, 11, NULL, false),
-('Открыть госпиталь', 'Собрать средства и открыть больницу для бедных', 'personal', 35, 11, NULL, false),
+-- Цели дона (ID 11-14)
+('Расширить влияние', 'Подчинить себе новые территории', 'personal', 40, 4, NULL, false),
+('Устранить конкурента', 'Избавиться от мешающего делу человека', 'personal', 35, 4, NULL, false),
+('Заключить союз', 'Договориться с торговой гильдией', 'personal', 30, 4, NULL, false),
+('Захватить власть', 'Стать теневым правителем города', 'personal', 80, 4, NULL, false), -- Требует высокого влияния и выполнения целей
 
--- Цели шпиона
-('Двойная игра', 'Получить доверие обеих враждующих фракций', 'personal', 50, 12, NULL, false),
+-- Цели консильери (ID 15-16)
+('Собрать информацию', 'Разведать планы конкурентов', 'personal', 20, 5, NULL, false),
+('Укрепить позиции семьи', 'Улучшить репутацию в обществе', 'personal', 25, 5, NULL, false),
 
--- Цели кондитера
-('Королевский заказ', 'Получить заказ на поставку сладостей ко двору', 'personal', 25, 13, NULL, false);
+-- Цели киллера (ID 17-18)
+('Выполнить контракт', 'Устранить указанную цель', 'personal', 30, 6, NULL, false),
+('Стать легендой', 'Прославиться как лучший исполнитель', 'personal', 45, 6, NULL, false),
 
--- Фракционные цели
+-- Цели купца (ID 19-21)
+('Монополизировать рынок', 'Стать единственным поставщиком редких товаров', 'personal', 40, 7, NULL, false),
+('Открыть новый филиал', 'Расширить торговую сеть', 'personal', 25, 7, NULL, false),
+('Разбогатеть', 'Накопить 5000 золотых', 'personal', 35, 7, NULL, false),
+
+-- Цели ювелира (ID 22-23)
+('Создать шедевр', 'Изготовить украшение для королевы', 'personal', 30, 8, NULL, false),
+('Найти редкий камень', 'Раздобыть легендарный алмаз', 'personal', 40, 8, NULL, false),
+
+-- Цели архиепископа (ID 24-25)
+('Провести великую мессу', 'Собрать всех верующих на службу', 'personal', 30, 9, NULL, false),
+('Искоренить ересь', 'Очистить город от темных культов', 'personal', 35, 9, NULL, false),
+
+-- Цели инквизитора (ID 26-27)
+('Допросить еретиков', 'Выявить отступников от веры', 'personal', 25, 10, NULL, false),
+('Укрепить веру', 'Обратить неверующих в истинную религию', 'personal', 30, 10, NULL, false),
+
+-- Цели доктора (ID 28-30)
+('Найти лекарство', 'Разработать средство от новой болезни', 'personal', 35, 11, NULL, false),
+('Спасти важную персону', 'Вылечить влиятельного пациента', 'personal', 30, 11, NULL, false),
+('Открыть больницу', 'Создать лечебницу для бедных', 'personal', 40, 11, NULL, false),
+
+-- Цели шпиона (ID 31-35)
+('Собрать улики', 'Найти компрометирующие материалы', 'personal', 20, 12, NULL, false),
+('Внедриться в организацию', 'Стать доверенным лицом во фракции', 'personal', 35, 12, NULL, false), -- Зависит от предыдущей
+('Раскрыть заговор', 'Узнать о планах переворота', 'personal', 40, 12, NULL, false), -- Зависит от влияния дона
+('Стать двойным агентом', 'Работать на две стороны одновременно', 'personal', 50, 12, NULL, false), -- Комбинированная зависимость
+('Исчезнуть бесследно', 'Получить новую личность и скрыться', 'personal', 60, 12, NULL, false), -- Финальная цель
+
+-- Цели кондитера (ID 36-37)
+('Испечь королевский торт', 'Создать десерт для дворцового банкета', 'personal', 25, 13, NULL, false),
+('Открыть вторую кондитерскую', 'Расширить бизнес', 'personal', 30, 13, NULL, false);
+
+-- Командные цели фракций (ID 38-45)
 INSERT INTO goals (title, description, goal_type, influence_points_reward, player_id, faction_id, is_completed) VALUES
-('Укрепить трон', 'Увеличить влияние королевской семьи на 100 очков', 'faction', 50, NULL, 1, false),
-('Устранить врагов короны', 'Нейтрализовать угрозы королевству', 'faction', 40, NULL, 1, false),
-('Захват власти', 'Контролировать ключевые позиции в городе', 'faction', 60, NULL, 2, false),
-('Торговая империя', 'Заключить торговые договоры с 5 различными сторонами', 'faction', 45, NULL, 3, false),
-('Духовное господство', 'Увеличить влияние церкви на 80 очков', 'faction', 50, NULL, 4, false);
+-- Цели Дворца
+('Укрепить оборону', 'Нанять дополнительную стражу', 'faction', 40, NULL, 1, false),
+('Провести бал', 'Организовать великосветский прием', 'faction', 30, NULL, 1, false),
+
+-- Цели Мафии
+('Расширить территорию', 'Захватить новые районы города', 'faction', 45, NULL, 2, false),
+('Устранить свидетеля', 'Избавиться от опасного информатора', 'faction', 35, NULL, 2, false),
+
+-- Цели Торговой гильдии
+('Открыть торговый путь', 'Наладить торговлю с соседним королевством', 'faction', 40, NULL, 3, false),
+('Провести ярмарку', 'Организовать грандиозную торговую ярмарку', 'faction', 30, NULL, 3, false),
+
+-- Цели Церкви
+('Построить храм', 'Возвести новую церковь', 'faction', 50, NULL, 4, false),
+('Провести крестовый поход', 'Организовать священную войну против неверных', 'faction', 60, NULL, 4, false);
 
 -- ============================================
--- ЗАВИСИМОСТИ ЦЕЛЕЙ (скрытые цели)
+-- ЗАВИСИМОСТИ ЦЕЛЕЙ (НОВОЕ!)
 -- ============================================
 
-INSERT INTO goal_dependencies (goal_id, required_goal_id, is_visible_before_completion) VALUES
-(2, 1, false), -- "Найти наследника" видна только после "Укрепить королевство"
-(4, 3, false); -- "Устранить конкурентов" видна только после "Расширить влияние"
+-- Зависимости целей короля
+-- Цель "Нейтрализовать угрозу" (ID 4) появляется когда Дон набирает опасное влияние
+INSERT INTO goal_dependencies (goal_id, dependency_type, influence_player_id, required_influence_points, is_visible_before_completion) VALUES
+(4, 'influence_threshold', 4, 100, false); -- Скрыта до тех пор, пока Дон не наберёт 100 влияния
+
+-- Финальная цель короля "Объединить королевство" (ID 5) требует выполнения нескольких предыдущих целей
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(5, 'goal_completion', 1, true),  -- Нужно укрепить королевство
+(5, 'goal_completion', 3, true);  -- Нужно провести реформы
+
+-- Зависимости целей принцессы
+-- Цель "Раскрыть заговор" (ID 8) зависит от выполнения предыдущих
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(8, 'goal_completion', 6, true),  -- Нужно изучить древнюю магию
+(8, 'goal_completion', 7, false); -- Нужно получить благословение (эта часть скрыта)
+
+-- Зависимости целей дона
+-- Финальная цель "Захватить власть" (ID 14) требует высокого влияния и выполнения целей
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(14, 'goal_completion', 11, true), -- Расширить влияние
+(14, 'goal_completion', 13, true); -- Заключить союз
+
+-- И требует чтобы Король потерял влияние (упал ниже порога)
+-- На самом деле, давайте сделаем по-другому: требует чтобы сам Дон набрал много влияния
+INSERT INTO goal_dependencies (goal_id, dependency_type, influence_player_id, required_influence_points, is_visible_before_completion) VALUES
+(14, 'influence_threshold', 4, 120, true); -- Дон должен сам набрать 120 влияния
+
+-- Зависимости целей шпиона (демонстрируют разные комбинации)
+-- "Внедриться в организацию" (ID 32) требует выполнения "Собрать улики" (ID 31)
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(32, 'goal_completion', 31, true);
+
+-- "Раскрыть заговор" (ID 33) требует чтобы Дон набрал опасное влияние
+INSERT INTO goal_dependencies (goal_id, dependency_type, influence_player_id, required_influence_points, is_visible_before_completion) VALUES
+(33, 'influence_threshold', 4, 100, true); -- Видна, но заблокирована
+
+-- "Стать двойным агентом" (ID 34) - комбинированная зависимость
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(34, 'goal_completion', 32, false); -- Нужно внедриться (скрыто)
+
+INSERT INTO goal_dependencies (goal_id, dependency_type, influence_player_id, required_influence_points, is_visible_before_completion) VALUES
+(34, 'influence_threshold', 4, 110, false), -- Дон должен набрать 110 влияния
+(34, 'influence_threshold', 1, 90, false);  -- Король должен иметь 90 влияния
+
+-- "Исчезнуть бесследно" (ID 35) - финальная цель шпиона
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(35, 'goal_completion', 34, false);
+
+-- Зависимости целей купца
+-- "Монополизировать рынок" (ID 19) требует высокого влияния самого купца и устранения конкурентов
+INSERT INTO goal_dependencies (goal_id, dependency_type, influence_player_id, required_influence_points, is_visible_before_completion) VALUES
+(19, 'influence_threshold', 7, 100, true), -- Купец должен набрать 100 влияния
+(19, 'influence_threshold', 8, 70, true);  -- Ювелир должна набрать 70 (партнерство)
+
+-- Зависимость цели доктора
+-- "Открыть больницу" (ID 30) требует выполнения предыдущих целей и богатства
+INSERT INTO goal_dependencies (goal_id, dependency_type, required_goal_id, is_visible_before_completion) VALUES
+(30, 'goal_completion', 28, true), -- Найти лекарство
+(30, 'goal_completion', 29, true); -- Спасти важную персону
 
 -- ============================================
--- ЗАДАЧИ
+-- РАЗБЛОКИРОВКИ ЗАВИСИМОСТЕЙ (демонстрация)
+-- ============================================
+
+-- Симулируем что некоторые условия уже были выполнены в прошлом
+-- Например, Дон уже набирал 100 влияния, но потом потерял часть из-за штрафа
+-- Это демонстрирует постоянную разблокировку
+
+-- Разблокируем зависимость цели короля "Нейтрализовать угрозу" от влияния Дона
+INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id, unlocked_at) VALUES
+(4, 
+ (SELECT id FROM goal_dependencies WHERE goal_id = 4 AND influence_player_id = 4),
+ 1, 
+ NOW() - INTERVAL '1 day');
+
+-- Разблокируем одну из зависимостей шпиона (цель "Раскрыть заговор")
+INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id, unlocked_at) VALUES
+(33,
+ (SELECT id FROM goal_dependencies WHERE goal_id = 33 AND influence_player_id = 4),
+ 12,
+ NOW() - INTERVAL '6 hours');
+
+-- ============================================
+-- ЗАДАЧИ ИГРОКОВ
 -- ============================================
 
 INSERT INTO tasks (player_id, title, description, is_completed) VALUES
+-- Задачи короля
 (1, 'Провести королевский совет', 'Собрать всех советников для обсуждения', true),
 (1, 'Проверить казну', 'Провести ревизию королевской сокровищницы', false),
 (1, 'Принять послов', 'Встретиться с представителями соседних королевств', false),
 
+-- Задачи дона
 (4, 'Собрать дань', 'Получить плату за защиту от торговцев', true),
 (4, 'Организовать встречу', 'Провести тайную встречу с союзниками', true),
 (4, 'Заказать спецоперацию', 'Поручить выполнение деликатного задания', false),
 
+-- Задачи купца
 (7, 'Закупить товары', 'Приобрести партию экзотических специй', true),
 (7, 'Найти новых клиентов', 'Расширить клиентскую базу', false),
 
+-- Задачи доктора
 (11, 'Вылечить больного', 'Помочь пациенту с редкой болезнью', true),
 (11, 'Собрать травы', 'Найти редкие лечебные растения', false),
 
+-- Задачи шпиона
 (12, 'Собрать информацию', 'Узнать о планах мафии', true),
 (12, 'Передать отчет', 'Доложить собранные данные заказчику', true),
 (12, 'Проникнуть во дворец', 'Получить доступ к секретным документам', false);
@@ -378,12 +513,26 @@ INSERT INTO revealed_info (revealer_player_id, target_player_id, info_type, reve
 -- Вывод статистики
 DO $$
 BEGIN
+    RAISE NOTICE '==============================================';
     RAISE NOTICE 'Seed данные успешно загружены!';
+    RAISE NOTICE '==============================================';
     RAISE NOTICE 'Фракций: %', (SELECT COUNT(*) FROM factions);
     RAISE NOTICE 'Игроков: %', (SELECT COUNT(*) FROM players);
     RAISE NOTICE 'Пользователей: %', (SELECT COUNT(*) FROM users);
     RAISE NOTICE 'Предметов: %', (SELECT COUNT(*) FROM items);
-    RAISE NOTICE 'Целей: %', (SELECT COUNT(*) FROM goals);
+    RAISE NOTICE 'Личных целей: %', (SELECT COUNT(*) FROM goals WHERE goal_type = 'personal');
+    RAISE NOTICE 'Командных целей: %', (SELECT COUNT(*) FROM goals WHERE goal_type = 'faction');
+    RAISE NOTICE 'Зависимостей целей: %', (SELECT COUNT(*) FROM goal_dependencies);
+    RAISE NOTICE '  - От выполнения целей: %', (SELECT COUNT(*) FROM goal_dependencies WHERE dependency_type = 'goal_completion');
+    RAISE NOTICE '  - От влияния игроков: %', (SELECT COUNT(*) FROM goal_dependencies WHERE dependency_type = 'influence_threshold');
+    RAISE NOTICE 'Разблокированных зависимостей: %', (SELECT COUNT(*) FROM goal_dependency_unlocks);
     RAISE NOTICE 'Договоров: %', (SELECT COUNT(*) FROM contracts);
     RAISE NOTICE 'Долговых расписок: %', (SELECT COUNT(*) FROM debt_receipts);
+    RAISE NOTICE '==============================================';
+    RAISE NOTICE 'ПРИМЕРЫ ЗАВИСИМОСТЕЙ ЦЕЛЕЙ:';
+    RAISE NOTICE '- Король: цель "Нейтрализовать угрозу" разблокирована (Дон набирал 100 влияния)';
+    RAISE NOTICE '- Шпион: цель "Раскрыть заговор" разблокирована (Дон набирал 100 влияния)';
+    RAISE NOTICE '- Шпион: цель "Стать двойным агентом" требует 3 условий (цель + 2 игрока с влиянием)';
+    RAISE NOTICE '- Дон: цель "Захватить власть" требует 120 влияния + 2 выполненные цели';
+    RAISE NOTICE '==============================================';
 END $$;
