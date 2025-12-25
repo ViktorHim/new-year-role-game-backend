@@ -16,3 +16,13 @@ type BalanceResponse struct {
 	Money     int `json:"money"`
 	Influence int `json:"influence"`
 }
+
+type PlayerListItem struct {
+	ID     int     `json:"id"`
+	Name   string  `json:"name"`
+	Avatar *string `json:"avatar"`
+}
+
+type PlayersListResponse struct {
+	Players []PlayerListItem `json:"players"`
+}

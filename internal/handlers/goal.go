@@ -431,7 +431,7 @@ func (h *GoalHandler) ToggleGoalCompletion(c *gin.Context) {
 		influenceChange = goal.InfluencePointsReward
 		action = "completed"
 	} else {
-		influenceChange = -goal.InfluencePointsReward
+		influenceChange = -goal.InfluencePointsReward - 5
 		action = "uncompleted"
 	}
 

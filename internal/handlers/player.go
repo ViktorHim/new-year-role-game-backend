@@ -129,3 +129,57 @@ func (h *PlayerHandler) GetPlayerBalance(c *gin.Context) {
 
 	c.JSON(http.StatusOK, balance)
 }
+
+// GetAllPlayers возвращает список всех игроков
+func (h *PlayerHandler) GetAllPlayers(c *gin.Context) {
+	// Проверяем авторизацию
+	playerIDInterface, exists := c.Get("player_id")
+	if !exists || playerIDInterface == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
+		return
+	}
+
+	playerID := playerIDInterface.(*int)
+	if playerID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User is not associated with a player"})
+		return
+	}
+
+	// Получаем список всех игроков
+	rows, err := h.db.Query(`
+		SELECT 
+			id,
+			character_name,
+			avatar
+		FROM players
+		ORDER BY character_name
+	`)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch players"})
+		return
+	}
+	defer rows.Close()
+
+	players := make([]models.PlayerListItem, 0)
+	for rows.Next() {
+		var player models.PlayerListItem
+		err := rows.Scan(
+			&player.ID,
+			&player.Name,
+			&player.Avatar,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan player"})
+			return
+		}
+		players = append(players, player)
+	}
+
+	if err = rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PlayersListResponse{Players: players})
+}
