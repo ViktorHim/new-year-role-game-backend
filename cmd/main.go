@@ -69,6 +69,10 @@ func main() {
 			protected.POST("/player/transfer/item", itemHandler.TransferItem)
 			protected.POST("/player/transfer/money", itemHandler.TransferMoney)
 			protected.GET("/player/items/effects/status", itemHandler.GetItemEffectsStatus)
+
+			abilityHandler := handlers.NewAbilityHandler(db)
+			protected.GET("/player/abilities", abilityHandler.GetPlayerAbilities)
+			protected.POST("/abilities/:id/use", abilityHandler.UseAbility)
 		}
 
 		// Admin endpoints - требуют роль администратора
