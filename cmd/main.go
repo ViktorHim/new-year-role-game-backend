@@ -44,8 +44,9 @@ func main() {
 			authHandler := handlers.NewAuthHandler(db, cfg.JWTKey)
 			auth.POST("/login", authHandler.Login)
 		}
-
 		protected := api.Group("")
+		gameHandler := handlers.NewGameHandler(db)
+		protected.GET("/game/status", gameHandler.GetGameStatus)
 		protected.Use(middleware.AuthMiddleware(cfg.JWTKey))
 		{
 			playerHandler := handlers.NewPlayerHandler(db)
@@ -77,7 +78,6 @@ func main() {
 			adminHandler := handlers.NewAdminHandler(db, effectsWorker)
 			admin.POST("/game/start", adminHandler.StartGame)
 			admin.POST("/game/end", adminHandler.EndGame)
-			admin.GET("/game/status", adminHandler.GetGameStatus)
 		}
 	}
 
