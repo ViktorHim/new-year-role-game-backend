@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"new-year-role-game-backend/internal/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -236,6 +237,28 @@ func (h *ItemHandler) TransferItem(c *gin.Context) {
 		return
 	}
 
+	// УСТАНОВКА ТАЙМЕРОВ: Инициализируем таймеры эффектов для нового владельца
+	// Устанавливаем last_executed_at = NOW(), чтобы новый владелец мог использовать
+	// эффекты только через period_seconds (не сразу)
+	now := time.Now()
+	_, err = tx.Exec(`
+		INSERT INTO item_effect_executions (player_id, item_id, effect_id, last_executed_at)
+		SELECT 
+			$1,
+			ie.item_id,
+			ie.effect_id,
+			$2
+		FROM item_effects ie
+		WHERE ie.item_id = $3
+		ON CONFLICT (player_id, item_id, effect_id) 
+		DO UPDATE SET last_executed_at = $2
+	`, req.ToPlayerID, now, req.ItemID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize effect timers for recipient"})
+		return
+	}
+
 	// Записываем транзакцию
 	_, err = tx.Exec(`
 		INSERT INTO item_transactions (from_player_id, to_player_id, item_id, transaction_type, description)
@@ -398,4 +421,106 @@ func (h *ItemHandler) TransferMoney(c *gin.Context) {
 		"to_player_id": req.ToPlayerID,
 		"new_balance":  newBalance,
 	})
+}
+
+// GetItemEffectsStatus возвращает статус всех эффектов предметов игрока
+func (h *ItemHandler) GetItemEffectsStatus(c *gin.Context) {
+	playerIDInterface, exists := c.Get("player_id")
+	if !exists || playerIDInterface == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
+		return
+	}
+
+	playerID := playerIDInterface.(*int)
+	if playerID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User is not associated with a player"})
+		return
+	}
+
+	rows, err := h.db.Query(`
+		SELECT 
+			i.id,
+			i.name,
+			e.id,
+			e.description,
+			e.effect_type,
+			e.period_seconds,
+			iee.last_executed_at
+		FROM player_items pi
+		JOIN items i ON pi.item_id = i.id
+		JOIN item_effects ie ON i.id = ie.item_id
+		JOIN effects e ON ie.effect_id = e.id
+		LEFT JOIN item_effect_executions iee ON 
+			iee.player_id = pi.player_id AND 
+			iee.item_id = i.id AND 
+			iee.effect_id = e.id
+		WHERE pi.player_id = $1
+		ORDER BY i.id, e.id
+	`, *playerID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch effects status"})
+		return
+	}
+	defer rows.Close()
+
+	effects := make([]models.EffectStatus, 0)
+	now := time.Now()
+
+	for rows.Next() {
+		var status models.EffectStatus
+
+		err := rows.Scan(
+			&status.ItemID,
+			&status.ItemName,
+			&status.EffectID,
+			&status.EffectDescription,
+			&status.EffectType,
+			&status.PeriodSeconds,
+			&status.LastExecutedAt,
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan effect status"})
+			return
+		}
+
+		// Вычисляем, можно ли выполнить эффект сейчас
+		if status.LastExecutedAt == nil {
+			status.CanExecuteNow = true
+		} else {
+			nextExecution := status.LastExecutedAt.Add(time.Duration(status.PeriodSeconds) * time.Second)
+			status.NextAvailableAt = &nextExecution
+			status.CanExecuteNow = now.After(nextExecution) || now.Equal(nextExecution)
+		}
+
+		effects = append(effects, status)
+	}
+
+	if err = rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.ItemEffectsStatusResponse{Effects: effects})
+}
+
+// calculateEffectValue вычисляет значение эффекта с учетом операции
+func (h *ItemHandler) calculateEffectValue(value int, operation string) int {
+	// Пока что поддерживаем только операцию 'add'
+	// В будущем можно добавить 'mul', 'sub', 'div' с базовым значением
+	switch operation {
+	case "add":
+		return value
+	case "mul":
+		// Для умножения нужно базовое значение, пока возвращаем как есть
+		return value
+	case "sub":
+		return -value
+	case "div":
+		// Для деления нужно базовое значение, пока возвращаем как есть
+		return value
+	default:
+		return value
+	}
 }

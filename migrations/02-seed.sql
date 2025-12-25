@@ -487,8 +487,8 @@ INSERT INTO game_settings (setting_key, setting_value, description) VALUES
 -- ВРЕМЕННАЯ МЕТКА ИГРЫ
 -- ============================================
 
-INSERT INTO game_timeline (game_started_at) VALUES
-(NOW() - INTERVAL '2 hours');
+-- INSERT INTO game_timeline (game_started_at) VALUES
+-- (NOW() - INTERVAL '2 hours');
 
 -- ============================================
 -- ИСТОРИЯ ИСПОЛЬЗОВАНИЯ СПОСОБНОСТЕЙ
