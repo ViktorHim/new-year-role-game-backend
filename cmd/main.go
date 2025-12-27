@@ -26,6 +26,7 @@ func main() {
 	// Создаем schedulers для точных таймеров
 	effectsScheduler := workers.NewEffectsScheduler(db)
 	contractScheduler := workers.NewContractScheduler(db)
+	debtScheduler := workers.NewDebtScheduler(db)
 
 	// Проверяем, активна ли игра, и запускаем schedulers если да
 	if isGameActive(db) {
@@ -39,6 +40,10 @@ func main() {
 		// Запускаем contracts scheduler (точные таймеры для договоров)
 		if err := contractScheduler.Start(); err != nil {
 			log.Printf("Warning: Failed to start contract scheduler: %v", err)
+		}
+
+		if err := debtScheduler.Start(); err != nil {
+			log.Printf("Warning: Failed to start debt scheduler: %v", err)
 		}
 
 		// // Запускаем workers как fallback (подстраховка)
@@ -100,6 +105,12 @@ func main() {
 			protected.GET("/player/contracts", contractHandler.GetPlayerContracts)
 			protected.POST("/contracts/create", contractHandler.CreateContract)
 			protected.POST("/contracts/:id/sign", contractsHandlerWithShedular.SignContract)
+
+			// Долговые расписки с scheduler
+			debtHandler := handlers.NewDebtHandler(db, debtScheduler)
+			protected.GET("/player/debts", debtHandler.GetPlayerDebts)
+			protected.POST("/debts/create", debtHandler.CreateDebtReceipt)
+			protected.POST("/debts/:id/return", debtHandler.ReturnDebt)
 		}
 
 		// Admin endpoints - требуют роль администратора
@@ -117,6 +128,11 @@ func main() {
 			admin.PUT("/contracts/type2/rewards", adminContractHandler.UpdateContractType2Rewards)
 			admin.PUT("/contracts/penalties", adminContractHandler.UpdateContractPenalties)
 			admin.DELETE("/contracts/:id/terminate", contractsHandlerWithShedular.TerminateContract)
+
+			// Настройки долговых расписок
+			adminDebtHandler := handlers.NewAdminDebtHandler(db)
+			admin.GET("/debts/settings", adminDebtHandler.GetDebtPenaltySettings)
+			admin.PUT("/debts/penalties", adminDebtHandler.UpdateDebtPenaltySettings)
 		}
 	}
 
