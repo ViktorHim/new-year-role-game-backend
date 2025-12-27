@@ -1,4 +1,4 @@
-// internal/handlers/admin.go
+// internal/handlers/admin_final.go
 package handlers
 
 import (
@@ -11,14 +11,17 @@ import (
 )
 
 type AdminHandler struct {
-	db            *sql.DB
-	effectsWorker *workers.EffectsWorker
+	db                *sql.DB
+	effectsScheduler  *workers.EffectsScheduler
+	contractScheduler *workers.ContractScheduler
 }
 
-func NewAdminHandler(db *sql.DB, effectsWorker *workers.EffectsWorker) *AdminHandler {
+func NewAdminHandler(db *sql.DB, effectsScheduler *workers.EffectsScheduler,
+	contractScheduler *workers.ContractScheduler) *AdminHandler {
 	return &AdminHandler{
-		db:            db,
-		effectsWorker: effectsWorker,
+		db:                db,
+		effectsScheduler:  effectsScheduler,
+		contractScheduler: contractScheduler,
 	}
 }
 
@@ -66,7 +69,6 @@ func (h *AdminHandler) StartGame(c *gin.Context) {
 	}
 
 	// Инициализируем таймеры эффектов для всех предметов игроков
-	// Устанавливаем last_executed_at = NOW(), чтобы первое выполнение произошло через period_seconds
 	_, err = tx.Exec(`
 		INSERT INTO item_effect_executions (player_id, item_id, effect_id, last_executed_at)
 		SELECT 
@@ -91,16 +93,44 @@ func (h *AdminHandler) StartGame(c *gin.Context) {
 		return
 	}
 
-	// Запускаем worker если он не запущен
-	if !h.effectsWorker.IsRunning() {
-		go h.effectsWorker.Start()
+	// Запускаем schedulers (основные системы с точными таймерами)
+	var schedulerErrors []string
+
+	if err := h.effectsScheduler.Start(); err != nil {
+		schedulerErrors = append(schedulerErrors, "effects: "+err.Error())
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":        "Game started successfully",
-		"started_at":     now,
-		"worker_running": h.effectsWorker.IsRunning(),
-	})
+	if err := h.contractScheduler.Start(); err != nil {
+		schedulerErrors = append(schedulerErrors, "contracts: "+err.Error())
+	}
+
+	// Запускаем workers как fallback (подстраховка)
+	// if !h.effectsWorker.IsRunning() {
+	// 	go h.effectsWorker.Start()
+	// }
+
+	// if !h.contractsWorker.IsRunning() {
+	// 	go h.contractsWorker.Start()
+	// }
+
+	response := gin.H{
+		"message":    "Game started successfully",
+		"started_at": now,
+		"schedulers": gin.H{
+			"effects_scheduled":   h.effectsScheduler.GetScheduledCount(),
+			"contracts_scheduled": h.contractScheduler.GetScheduledCount(),
+		},
+		// "workers": gin.H{
+		// 	"effects_running":   h.effectsWorker.IsRunning(),
+		// 	"contracts_running": h.contractsWorker.IsRunning(),
+		// },
+	}
+
+	if len(schedulerErrors) > 0 {
+		response["scheduler_warnings"] = schedulerErrors
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // EndGame завершает игру
@@ -150,8 +180,9 @@ func (h *AdminHandler) EndGame(c *gin.Context) {
 		return
 	}
 
-	// Останавливаем worker (он остановится при следующей проверке)
-	// Worker сам проверяет статус игры и не будет выполнять эффекты
+	// Останавливаем все schedulers
+	h.effectsScheduler.Stop()
+	h.contractScheduler.Stop()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Game ended successfully",
@@ -159,4 +190,116 @@ func (h *AdminHandler) EndGame(c *gin.Context) {
 		"ended_at":   now,
 		"duration":   now.Sub(*gameStarted).String(),
 	})
+}
+
+// GetGameStats возвращает детальную статистику игры
+func (h *AdminHandler) GetGameStats(c *gin.Context) {
+	stats := gin.H{
+		"schedulers": gin.H{
+			"effects_scheduled":   h.effectsScheduler.GetScheduledCount(),
+			"contracts_scheduled": h.contractScheduler.GetScheduledCount(),
+		},
+		// "workers": gin.H{
+		// 	"effects_running":   h.effectsWorker.IsRunning(),
+		// 	"contracts_running": h.contractsWorker.IsRunning(),
+		// },
+	}
+
+	// Статистика по договорам
+	var contractStats struct {
+		Pending    int
+		Signed     int
+		Completed  int
+		Terminated int
+	}
+
+	err := h.db.QueryRow(`
+		SELECT 
+			COUNT(*) FILTER (WHERE status = 'pending') as pending,
+			COUNT(*) FILTER (WHERE status = 'signed') as signed,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE status = 'terminated') as terminated
+		FROM contracts
+	`).Scan(&contractStats.Pending, &contractStats.Signed, &contractStats.Completed, &contractStats.Terminated)
+
+	if err == nil {
+		stats["contracts"] = contractStats
+	}
+
+	// Количество истекших, но не завершённых договоров (должно быть 0 при работающем scheduler)
+	var expiredContracts int
+	err = h.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM contracts
+		WHERE status = 'signed' AND expires_at <= NOW()
+	`).Scan(&expiredContracts)
+
+	if err == nil {
+		stats["expired_contracts"] = expiredContracts
+		if expiredContracts > 0 {
+			stats["warning"] = "There are expired contracts not completed yet"
+		}
+	}
+
+	// Статистика по игрокам и предметам
+	var playerStats struct {
+		TotalPlayers     int
+		PlayersWithItems int
+		TotalItems       int
+		TotalEffects     int
+	}
+
+	err = h.db.QueryRow(`
+		SELECT 
+			(SELECT COUNT(*) FROM players) as total_players,
+			(SELECT COUNT(DISTINCT player_id) FROM player_items) as players_with_items,
+			(SELECT COUNT(*) FROM player_items) as total_items,
+			(SELECT COUNT(*) FROM item_effect_executions) as total_effects
+	`).Scan(
+		&playerStats.TotalPlayers,
+		&playerStats.PlayersWithItems,
+		&playerStats.TotalItems,
+		&playerStats.TotalEffects,
+	)
+
+	if err == nil {
+		stats["players"] = playerStats
+	}
+
+	// Информация об игре
+	var gameInfo struct {
+		Status    string
+		StartedAt *time.Time
+		EndedAt   *time.Time
+		Duration  *string
+	}
+
+	var gameStarted, gameEnded *time.Time
+	err = h.db.QueryRow(`
+		SELECT game_started_at, game_ended_at
+		FROM game_timeline
+		ORDER BY id DESC
+		LIMIT 1
+	`).Scan(&gameStarted, &gameEnded)
+
+	if err == nil {
+		gameInfo.StartedAt = gameStarted
+		gameInfo.EndedAt = gameEnded
+
+		if gameStarted != nil && gameEnded == nil {
+			gameInfo.Status = "running"
+			duration := time.Since(*gameStarted).String()
+			gameInfo.Duration = &duration
+		} else if gameStarted != nil && gameEnded != nil {
+			gameInfo.Status = "ended"
+			duration := gameEnded.Sub(*gameStarted).String()
+			gameInfo.Duration = &duration
+		} else {
+			gameInfo.Status = "not_started"
+		}
+
+		stats["game"] = gameInfo
+	}
+
+	c.JSON(http.StatusOK, stats)
 }

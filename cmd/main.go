@@ -23,15 +23,37 @@ func main() {
 	}
 	defer db.Close()
 
-	// Создаем worker, но НЕ запускаем его автоматически
-	// Worker будет запущен админом через /admin/game/start
-	effectsWorker := workers.NewEffectsWorker(db, cfg.EffectsWorkerInterval)
+	// Создаем schedulers для точных таймеров
+	effectsScheduler := workers.NewEffectsScheduler(db)
+	contractScheduler := workers.NewContractScheduler(db)
 
-	// Проверяем, активна ли игра, и запускаем worker если да
-	if isGameActive(db) && !effectsWorker.IsRunning() {
-		log.Println("Game is active, starting effects worker...")
-		go effectsWorker.Start()
+	// Проверяем, активна ли игра, и запускаем schedulers если да
+	if isGameActive(db) {
+		log.Println("Game is active, starting schedulers and workers...")
+
+		// Запускаем effects scheduler (точные таймеры для эффектов)
+		if err := effectsScheduler.Start(); err != nil {
+			log.Printf("Warning: Failed to start effects scheduler: %v", err)
+		}
+
+		// Запускаем contracts scheduler (точные таймеры для договоров)
+		if err := contractScheduler.Start(); err != nil {
+			log.Printf("Warning: Failed to start contract scheduler: %v", err)
+		}
+
+		// // Запускаем workers как fallback (подстраховка)
+		// if !effectsWorker.IsRunning() {
+		// 	log.Println("Starting effects worker as fallback...")
+		// 	go effectsWorker.Start()
+		// }
+
+		// if !contractsWorker.IsRunning() {
+		// 	log.Println("Starting contracts worker as fallback...")
+		// 	go contractsWorker.Start()
+		// }
 	}
+
+	contractsHandlerWithShedular := handlers.NewContractHandlerWithScheduler(db, contractScheduler)
 
 	r := gin.Default()
 
@@ -64,7 +86,7 @@ func main() {
 			protected.GET("/player/faction/goals", goalHandler.GetFactionGoals)
 			protected.PUT("/goals/:id/toggle", goalHandler.ToggleGoalCompletion)
 
-			itemHandler := handlers.NewItemHandler(db)
+			itemHandler := handlers.NewItemHandlerWithScheduler(db, effectsScheduler)
 			protected.GET("/player/inventory", itemHandler.GetPlayerInventory)
 			protected.POST("/player/transfer/item", itemHandler.TransferItem)
 			protected.POST("/player/transfer/money", itemHandler.TransferMoney)
@@ -73,6 +95,11 @@ func main() {
 			abilityHandler := handlers.NewAbilityHandler(db)
 			protected.GET("/player/abilities", abilityHandler.GetPlayerAbilities)
 			protected.POST("/abilities/:id/use", abilityHandler.UseAbility)
+
+			contractHandler := handlers.NewContractHandler(db)
+			protected.GET("/player/contracts", contractHandler.GetPlayerContracts)
+			protected.POST("/contracts/create", contractHandler.CreateContract)
+			protected.POST("/contracts/:id/sign", contractsHandlerWithShedular.SignContract)
 		}
 
 		// Admin endpoints - требуют роль администратора
@@ -80,9 +107,16 @@ func main() {
 		admin.Use(middleware.AuthMiddleware(cfg.JWTKey))
 		admin.Use(middleware.AdminMiddleware())
 		{
-			adminHandler := handlers.NewAdminHandler(db, effectsWorker)
+			adminHandler := handlers.NewAdminHandler(db, effectsScheduler, contractScheduler)
 			admin.POST("/game/start", adminHandler.StartGame)
 			admin.POST("/game/end", adminHandler.EndGame)
+
+			adminContractHandler := handlers.NewAdminContractHandler(db)
+			admin.GET("/contracts/settings", adminContractHandler.GetContractSettings)
+			admin.PUT("/contracts/type1/rewards", adminContractHandler.UpdateContractType1Rewards)
+			admin.PUT("/contracts/type2/rewards", adminContractHandler.UpdateContractType2Rewards)
+			admin.PUT("/contracts/penalties", adminContractHandler.UpdateContractPenalties)
+			admin.DELETE("/contracts/:id/terminate", contractsHandlerWithShedular.TerminateContract)
 		}
 	}
 

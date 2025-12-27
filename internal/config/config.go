@@ -8,10 +8,12 @@ import (
 )
 
 type Config struct {
-	DatabaseURL           string
-	JWTKey                string
-	Port                  string
-	EffectsWorkerInterval int // в секундах
+	DatabaseURL             string
+	JWTKey                  string
+	Port                    string
+	EffectsWorkerInterval   int  // в секундах
+	ContractsWorkerInterval int  // в секундах
+	ContractsAutoComplete   bool // автоматически завершать истекшие договоры
 }
 
 func LoadConfig() *Config {
@@ -38,10 +40,26 @@ func LoadConfig() *Config {
 		}
 	}
 
+	// Интервал проверки договоров (по умолчанию 120 секунд = 2 минуты)
+	contractsWorkerInterval := 120
+	if envInterval := os.Getenv("CONTRACTS_WORKER_INTERVAL"); envInterval != "" {
+		if interval, err := strconv.Atoi(envInterval); err == nil && interval > 0 {
+			contractsWorkerInterval = interval
+		}
+	}
+
+	// Автоматическое завершение договоров (по умолчанию false)
+	contractsAutoComplete := false
+	if envAutoComplete := os.Getenv("CONTRACTS_AUTO_COMPLETE"); envAutoComplete != "" {
+		contractsAutoComplete = envAutoComplete == "true" || envAutoComplete == "1"
+	}
+
 	return &Config{
-		DatabaseURL:           databaseURL,
-		JWTKey:                jwtKey,
-		Port:                  port,
-		EffectsWorkerInterval: effectsWorkerInterval,
+		DatabaseURL:             databaseURL,
+		JWTKey:                  jwtKey,
+		Port:                    port,
+		EffectsWorkerInterval:   effectsWorkerInterval,
+		ContractsWorkerInterval: contractsWorkerInterval,
+		ContractsAutoComplete:   contractsAutoComplete,
 	}
 }

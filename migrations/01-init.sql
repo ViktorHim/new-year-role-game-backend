@@ -1,24 +1,16 @@
 -- migrations/01-init.sql
 
--- ============================================
--- СХЕМА БАЗЫ ДАННЫХ ДЛЯ РОЛЕВОЙ ИГРЫ
--- ============================================
-
--- ============================================
--- ОСНОВНЫЕ ТАБЛИЦЫ
--- ============================================
-
--- Фракции¸
+-- фракции
 CREATE TABLE IF NOT EXISTS factions (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    faction_influence INTEGER DEFAULT 0, -- очки самой фракции (не игроков)
+    faction_influence INTEGER DEFAULT 0,
     is_composition_visible_to_all BOOLEAN DEFAULT false,
-    leader_player_id INTEGER -- будет добавлен FK после создания players
+    leader_player_id INTEGER
 );
 
--- Игроки¸
+-- игроки
 CREATE TABLE IF NOT EXISTS players (
     id SERIAL PRIMARY KEY,
     character_name VARCHAR(255) NOT NULL,
@@ -29,22 +21,22 @@ CREATE TABLE IF NOT EXISTS players (
     influence INTEGER DEFAULT 0,
     faction_id INTEGER REFERENCES factions(id) ON DELETE SET NULL,
     can_change_faction BOOLEAN DEFAULT false,
-    avatar TEXT -- изображение в base64
+    avatar TEXT -- изображение в формате base64
 );
 
--- информация, доступная игроку о других
+-- информация о других игроках
 CREATE TABLE IF NOT EXISTS info_about_other_players (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) on DELETE SET NULL,
     description TEXT
 );
 
--- Добавляем FK для лидера фракции после создания таблицы players
+-- создаем FK для других игроков
 ALTER TABLE factions 
 ADD CONSTRAINT fk_leader_player 
 FOREIGN KEY (leader_player_id) REFERENCES players(id) ON DELETE SET NULL;
 
--- Ð’ÐµÑ‰Ð¸ (Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹)
+-- предметы
 CREATE TABLE IF NOT EXISTS items (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -52,18 +44,17 @@ CREATE TABLE IF NOT EXISTS items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Вещи (предметы)
+-- эффекты
 CREATE TABLE IF NOT EXISTS effects (
     id SERIAL PRIMARY KEY,
     description TEXT,
     effect_type VARCHAR(20) NOT NULL, -- 'generate_money', 'generate_influence', 'spawn_item'
-    -- Для генерации денег/влияния
     generated_resource VARCHAR(20), -- 'money', 'influence'
     operation VARCHAR(10) DEFAULT 'add', -- 'add', 'mul', 'sub', 'div'
     value INTEGER,
-    -- Для создания предметов
+    -- Ð”Ð»Ñ ÑÐ¾Ð·Ð´Ð°Ð½Ð¸Ñ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð²
     spawned_item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
-    -- Период действия
+    -- ÐŸÐµÑ€Ð¸Ð¾Ð´ Ð´ÐµÐ¹ÑÑ‚Ð²Ð¸Ñ
     period_seconds INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (
@@ -72,14 +63,14 @@ CREATE TABLE IF NOT EXISTS effects (
     )
 );
 
--- Связь вещей и эффектов (одна вещь может иметь несколько эффектов)
+-- Ð¡Ð²ÑÐ·ÑŒ Ð²ÐµÑ‰ÐµÐ¹ Ð¸ ÑÑ„Ñ„ÐµÐºÑ‚Ð¾Ð² (Ð¾Ð´Ð½Ð° Ð²ÐµÑ‰ÑŒ Ð¼Ð¾Ð¶ÐµÑ‚ Ð¸Ð¼ÐµÑ‚ÑŒ Ð½ÐµÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÑ„Ñ„ÐµÐºÑ‚Ð¾Ð²)
 CREATE TABLE IF NOT EXISTS item_effects (
     item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
     effect_id INTEGER REFERENCES effects(id) ON DELETE CASCADE,
     PRIMARY KEY (item_id, effect_id)
 );
 
--- Инвентарь игроков
+-- Ð˜Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€ÑŒ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð²
 CREATE TABLE IF NOT EXISTS player_items (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
@@ -88,7 +79,7 @@ CREATE TABLE IF NOT EXISTS player_items (
     UNIQUE(player_id, item_id)
 );
 
--- Отслеживание последнего выполнения эффектов вещей
+-- ÐžÑ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ðµ Ð¿Ð¾ÑÐ»ÐµÐ´Ð½ÐµÐ³Ð¾ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ ÑÑ„Ñ„ÐµÐºÑ‚Ð¾Ð² Ð²ÐµÑ‰ÐµÐ¹
 CREATE TABLE IF NOT EXISTS item_effect_executions (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
@@ -99,10 +90,10 @@ CREATE TABLE IF NOT EXISTS item_effect_executions (
 );
 
 -- ============================================
--- СПОСОБНОСТИ
+-- Ð¡ÐŸÐžÐ¡ÐžÐ‘ÐÐžÐ¡Ð¢Ð˜
 -- ============================================
 
--- Уникальные способности
+-- Ð£Ð½Ð¸ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚Ð¸
 CREATE TABLE IF NOT EXISTS abilities (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
@@ -110,14 +101,14 @@ CREATE TABLE IF NOT EXISTS abilities (
     description TEXT,
     ability_type VARCHAR(50) NOT NULL, -- 'reveal_info', 'add_influence', 'transfer_influence'
     cooldown_minutes INTEGER DEFAULT NULL,
-    start_delay_minutes INTEGER DEFAULT NULL, -- задержка от начала игры
-    required_influence_points INTEGER DEFAULT NULL, -- минимальное количество очков влияния для разблокировки
-    is_unlocked BOOLEAN DEFAULT true, -- была ли способность разблокирована (после разблокировки остается доступной всегда)
-    -- Для способности начисления влияния другому игроку (add_influence)
+    start_delay_minutes INTEGER DEFAULT NULL, -- Ð·Ð°Ð´ÐµÑ€Ð¶ÐºÐ° Ð¾Ñ‚ Ð½Ð°Ñ‡Ð°Ð»Ð° Ð¸Ð³Ñ€Ñ‹
+    required_influence_points INTEGER DEFAULT NULL, -- Ð¼Ð¸Ð½Ð¸Ð¼Ð°Ð»ÑŒÐ½Ð¾Ðµ ÐºÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð¾ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð´Ð»Ñ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸
+    is_unlocked BOOLEAN DEFAULT true, -- Ð±Ñ‹Ð»Ð° Ð»Ð¸ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚ÑŒ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð° (Ð¿Ð¾ÑÐ»Ðµ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð¾ÑÑ‚Ð°ÐµÑ‚ÑÑ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð¾Ð¹ Ð²ÑÐµÐ³Ð´Ð°)
+    -- Ð”Ð»Ñ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚Ð¸ Ð½Ð°Ñ‡Ð¸ÑÐ»ÐµÐ½Ð¸Ñ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð´Ñ€ÑƒÐ³Ð¾Ð¼Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÑƒ (add_influence)
     influence_points_to_add INTEGER,
-    -- Для способности снятия влияния у другого игрока и начисления себе (transfer_influence)
-    influence_points_to_remove INTEGER, -- сколько снять у целевого игрока
-    influence_points_to_self INTEGER, -- сколько начислить себе
+    -- Ð”Ð»Ñ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚Ð¸ ÑÐ½ÑÑ‚Ð¸Ñ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ñƒ Ð´Ñ€ÑƒÐ³Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ° Ð¸ Ð½Ð°Ñ‡Ð¸ÑÐ»ÐµÐ½Ð¸Ñ ÑÐµÐ±Ðµ (transfer_influence)
+    influence_points_to_remove INTEGER, -- ÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐ½ÑÑ‚ÑŒ Ñƒ Ñ†ÐµÐ»ÐµÐ²Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ°
+    influence_points_to_self INTEGER, -- ÑÐºÐ¾Ð»ÑŒÐºÐ¾ Ð½Ð°Ñ‡Ð¸ÑÐ»Ð¸Ñ‚ÑŒ ÑÐµÐ±Ðµ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (
         (ability_type = 'reveal_info' AND 
@@ -135,41 +126,41 @@ CREATE TABLE IF NOT EXISTS abilities (
     )
 );
 
--- История использования способностей (для отслеживания cooldown)
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ð½Ð¸Ñ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚ÐµÐ¹ (Ð´Ð»Ñ Ð¾Ñ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ñ cooldown)
 CREATE TABLE IF NOT EXISTS ability_usage (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     ability_id INTEGER REFERENCES abilities(id) ON DELETE CASCADE,
-    target_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL, -- для способностей, направленных на других игроков
-    info_category VARCHAR(20), -- 'faction', 'goal', 'item' (для reveal_info)
+    target_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL, -- Ð´Ð»Ñ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚ÐµÐ¹, Ð½Ð°Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð½Ñ‹Ñ… Ð½Ð° Ð´Ñ€ÑƒÐ³Ð¸Ñ… Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð²
+    info_category VARCHAR(20), -- 'faction', 'goal', 'item' (Ð´Ð»Ñ reveal_info)
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- История раскрытой информации
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ñ€Ð°ÑÐºÑ€Ñ‹Ñ‚Ð¾Ð¹ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸Ð¸
 CREATE TABLE IF NOT EXISTS revealed_info (
     id SERIAL PRIMARY KEY,
     revealer_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     target_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     info_type VARCHAR(20) NOT NULL, -- 'faction', 'goal', 'item'
-    revealed_data JSONB, -- JSON с раскрытой информацией
+    revealed_data JSONB, -- JSON Ñ Ñ€Ð°ÑÐºÑ€Ñ‹Ñ‚Ð¾Ð¹ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸ÐµÐ¹
     revealed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ability_usage_id INTEGER REFERENCES ability_usage(id) ON DELETE SET NULL
 );
 
 -- ============================================
--- ЦЕЛИ
+-- Ð¦Ð•Ð›Ð˜
 -- ============================================
 
--- Цели (личные и фракционные)
+-- Ð¦ÐµÐ»Ð¸ (Ð»Ð¸Ñ‡Ð½Ñ‹Ðµ Ð¸ Ñ„Ñ€Ð°ÐºÑ†Ð¸Ð¾Ð½Ð½Ñ‹Ðµ)
 CREATE TABLE IF NOT EXISTS goals (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     goal_type VARCHAR(20) NOT NULL, -- 'personal', 'faction'
     influence_points_reward INTEGER DEFAULT 0,
-    -- Для личных целей
+    -- Ð”Ð»Ñ Ð»Ð¸Ñ‡Ð½Ñ‹Ñ… Ñ†ÐµÐ»ÐµÐ¹
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-    -- Для фракционных целей
+    -- Ð”Ð»Ñ Ñ„Ñ€Ð°ÐºÑ†Ð¸Ð¾Ð½Ð½Ñ‹Ñ… Ñ†ÐµÐ»ÐµÐ¹
     faction_id INTEGER REFERENCES factions(id) ON DELETE CASCADE,
     is_completed BOOLEAN DEFAULT false,
     completed_at TIMESTAMP,
@@ -181,35 +172,35 @@ CREATE TABLE IF NOT EXISTS goals (
 );
 
 
--- Зависимости целей друг от друга (скрытые цели)
--- ОБНОВЛЕНО: Теперь поддерживает зависимость от влияния других игроков
+-- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ñ†ÐµÐ»ÐµÐ¹ Ð´Ñ€ÑƒÐ³ Ð¾Ñ‚ Ð´Ñ€ÑƒÐ³Ð° (ÑÐºÑ€Ñ‹Ñ‚Ñ‹Ðµ Ñ†ÐµÐ»Ð¸)
+-- ÐžÐ‘ÐÐžÐ’Ð›Ð•ÐÐž: Ð¢ÐµÐ¿ÐµÑ€ÑŒ Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶Ð¸Ð²Ð°ÐµÑ‚ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¾Ñ‚ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð´Ñ€ÑƒÐ³Ð¸Ñ… Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð²
 CREATE TABLE IF NOT EXISTS goal_dependencies (
     id SERIAL PRIMARY KEY,
-    goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE, -- эта цель зависит от...
+    goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE, -- ÑÑ‚Ð° Ñ†ÐµÐ»ÑŒ Ð·Ð°Ð²Ð¸ÑÐ¸Ñ‚ Ð¾Ñ‚...
     
-    -- Тип зависимости
-    dependency_type VARCHAR(30) NOT NULL, -- 'goal_completion' или 'influence_threshold'
+    -- Ð¢Ð¸Ð¿ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸
+    dependency_type VARCHAR(30) NOT NULL, -- 'goal_completion' Ð¸Ð»Ð¸ 'influence_threshold'
     
-    -- Для зависимости от выполнения другой цели
+    -- Ð”Ð»Ñ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ Ð´Ñ€ÑƒÐ³Ð¾Ð¹ Ñ†ÐµÐ»Ð¸
     required_goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
     
-    -- Для зависимости от очков влияния другого игрока
+    -- Ð”Ð»Ñ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð´Ñ€ÑƒÐ³Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ°
     influence_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     required_influence_points INTEGER,
     
-    -- Видимость до выполнения условия
-    is_visible_before_completion BOOLEAN DEFAULT false, -- false = полностью скрыта; true = видна, но заблокирована
+    -- Ð’Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚ÑŒ Ð´Ð¾ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ ÑƒÑÐ»Ð¾Ð²Ð¸Ñ
+    is_visible_before_completion BOOLEAN DEFAULT false, -- false = Ð¿Ð¾Ð»Ð½Ð¾ÑÑ‚ÑŒÑŽ ÑÐºÑ€Ñ‹Ñ‚Ð°; true = Ð²Ð¸Ð´Ð½Ð°, Ð½Ð¾ Ð·Ð°Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð°
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Проверки целостности данных
+    -- ÐŸÑ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ñ†ÐµÐ»Ð¾ÑÑ‚Ð½Ð¾ÑÑ‚Ð¸ Ð´Ð°Ð½Ð½Ñ‹Ñ…
     CHECK (
-        -- Для типа 'goal_completion' должен быть указан required_goal_id
+        -- Ð”Ð»Ñ Ñ‚Ð¸Ð¿Ð° 'goal_completion' Ð´Ð¾Ð»Ð¶ÐµÐ½ Ð±Ñ‹Ñ‚ÑŒ ÑƒÐºÐ°Ð·Ð°Ð½ required_goal_id
         (dependency_type = 'goal_completion' AND 
          required_goal_id IS NOT NULL AND 
          influence_player_id IS NULL AND 
          required_influence_points IS NULL) OR
-        -- Для типа 'influence_threshold' должны быть указаны influence_player_id и required_influence_points
+        -- Ð”Ð»Ñ Ñ‚Ð¸Ð¿Ð° 'influence_threshold' Ð´Ð¾Ð»Ð¶Ð½Ñ‹ Ð±Ñ‹Ñ‚ÑŒ ÑƒÐºÐ°Ð·Ð°Ð½Ñ‹ influence_player_id Ð¸ required_influence_points
         (dependency_type = 'influence_threshold' AND 
          required_goal_id IS NULL AND 
          influence_player_id IS NOT NULL AND 
@@ -217,44 +208,44 @@ CREATE TABLE IF NOT EXISTS goal_dependencies (
          required_influence_points > 0)
     ),
     
-    -- Цель не может зависеть от самой себя
+    -- Ð¦ÐµÐ»ÑŒ Ð½Ðµ Ð¼Ð¾Ð¶ÐµÑ‚ Ð·Ð°Ð²Ð¸ÑÐµÑ‚ÑŒ Ð¾Ñ‚ ÑÐ°Ð¼Ð¾Ð¹ ÑÐµÐ±Ñ
     CHECK (goal_id != required_goal_id),
     
-    -- Уникальность зависимостей
+    -- Ð£Ð½Ð¸ÐºÐ°Ð»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹
     UNIQUE(goal_id, dependency_type, required_goal_id),
     UNIQUE(goal_id, dependency_type, influence_player_id)
 );
 
--- История разблокировок зависимостей целей
--- Когда зависимость разблокируется (цель выполнена или порог влияния достигнут),
--- запись добавляется в эту таблицу и остаётся там навсегда
--- Это гарантирует, что цель остаётся доступной даже если условие перестало выполняться
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð¾Ðº Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹ Ñ†ÐµÐ»ÐµÐ¹
+-- ÐšÐ¾Ð³Ð´Ð° Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€ÑƒÐµÑ‚ÑÑ (Ñ†ÐµÐ»ÑŒ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð° Ð¸Ð»Ð¸ Ð¿Ð¾Ñ€Ð¾Ð³ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð´Ð¾ÑÑ‚Ð¸Ð³Ð½ÑƒÑ‚),
+-- Ð·Ð°Ð¿Ð¸ÑÑŒ Ð´Ð¾Ð±Ð°Ð²Ð»ÑÐµÑ‚ÑÑ Ð² ÑÑ‚Ñƒ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ñƒ Ð¸ Ð¾ÑÑ‚Ð°Ñ‘Ñ‚ÑÑ Ñ‚Ð°Ð¼ Ð½Ð°Ð²ÑÐµÐ³Ð´Ð°
+-- Ð­Ñ‚Ð¾ Ð³Ð°Ñ€Ð°Ð½Ñ‚Ð¸Ñ€ÑƒÐµÑ‚, Ñ‡Ñ‚Ð¾ Ñ†ÐµÐ»ÑŒ Ð¾ÑÑ‚Ð°Ñ‘Ñ‚ÑÑ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð¾Ð¹ Ð´Ð°Ð¶Ðµ ÐµÑÐ»Ð¸ ÑƒÑÐ»Ð¾Ð²Ð¸Ðµ Ð¿ÐµÑ€ÐµÑÑ‚Ð°Ð»Ð¾ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÑÑ‚ÑŒÑÑ
 CREATE TABLE IF NOT EXISTS goal_dependency_unlocks (
     id SERIAL PRIMARY KEY,
     goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
     dependency_id INTEGER REFERENCES goal_dependencies(id) ON DELETE CASCADE,
-    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- владелец цели
+    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- Ð²Ð»Ð°Ð´ÐµÐ»ÐµÑ† Ñ†ÐµÐ»Ð¸
     unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    -- Одна зависимость может быть разблокирована только один раз для одной цели
+    -- ÐžÐ´Ð½Ð° Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¼Ð¾Ð¶ÐµÑ‚ Ð±Ñ‹Ñ‚ÑŒ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð° Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¾Ð´Ð¸Ð½ Ñ€Ð°Ð· Ð´Ð»Ñ Ð¾Ð´Ð½Ð¾Ð¹ Ñ†ÐµÐ»Ð¸
     UNIQUE(goal_id, dependency_id)
 );
 
--- История выполнения целей (для отслеживания начисления/снятия очков влияния)
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ Ñ†ÐµÐ»ÐµÐ¹ (Ð´Ð»Ñ Ð¾Ñ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ñ Ð½Ð°Ñ‡Ð¸ÑÐ»ÐµÐ½Ð¸Ñ/ÑÐ½ÑÑ‚Ð¸Ñ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ)
 CREATE TABLE IF NOT EXISTS goal_completion_history (
     id SERIAL PRIMARY KEY,
     goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
-    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- кто отметил цель
+    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- ÐºÑ‚Ð¾ Ð¾Ñ‚Ð¼ÐµÑ‚Ð¸Ð» Ñ†ÐµÐ»ÑŒ
     action VARCHAR(20) NOT NULL, -- 'completed', 'uncompleted'
-    influence_change INTEGER NOT NULL, -- изменение влияния
+    influence_change INTEGER NOT NULL, -- Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ðµ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
--- ЗАДАЧИ И ГОНКА ЦЕЛЕЙ
+-- Ð—ÐÐ”ÐÐ§Ð˜ Ð˜ Ð“ÐžÐÐšÐ Ð¦Ð•Ð›Ð•Ð™
 -- ============================================
 
--- Задачи игроков (отличаются от целей)
+-- Ð—Ð°Ð´Ð°Ñ‡Ð¸ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð² (Ð¾Ñ‚Ð»Ð¸Ñ‡Ð°ÑŽÑ‚ÑÑ Ð¾Ñ‚ Ñ†ÐµÐ»ÐµÐ¹)
 CREATE TABLE IF NOT EXISTS tasks (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
@@ -265,7 +256,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- История выполнения задач
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ Ð·Ð°Ð´Ð°Ñ‡
 CREATE TABLE IF NOT EXISTS task_completion_history (
     id SERIAL PRIMARY KEY,
     task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
@@ -274,7 +265,7 @@ CREATE TABLE IF NOT EXISTS task_completion_history (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Условия для запуска гонки целей
+-- Ð£ÑÐ»Ð¾Ð²Ð¸Ñ Ð´Ð»Ñ Ð·Ð°Ð¿ÑƒÑÐºÐ° Ð³Ð¾Ð½ÐºÐ¸ Ñ†ÐµÐ»ÐµÐ¹
 CREATE TABLE IF NOT EXISTS goal_race_triggers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -284,7 +275,7 @@ CREATE TABLE IF NOT EXISTS goal_race_triggers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Игроки, участвующие в гонке при срабатывании триггера
+-- Ð˜Ð³Ñ€Ð¾ÐºÐ¸, ÑƒÑ‡Ð°ÑÑ‚Ð²ÑƒÑŽÑ‰Ð¸Ðµ Ð² Ð³Ð¾Ð½ÐºÐµ Ð¿Ñ€Ð¸ ÑÑ€Ð°Ð±Ð°Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ð¸ Ñ‚Ñ€Ð¸Ð³Ð³ÐµÑ€Ð°
 CREATE TABLE IF NOT EXISTS goal_race_trigger_participants (
     id SERIAL PRIMARY KEY,
     trigger_id INTEGER REFERENCES goal_race_triggers(id) ON DELETE CASCADE,
@@ -293,11 +284,11 @@ CREATE TABLE IF NOT EXISTS goal_race_trigger_participants (
     UNIQUE(trigger_id, player_id)
 );
 
--- Раунды гонки целей
+-- Ð Ð°ÑƒÐ½Ð´Ñ‹ Ð³Ð¾Ð½ÐºÐ¸ Ñ†ÐµÐ»ÐµÐ¹
 CREATE TABLE IF NOT EXISTS goal_race_rounds (
     id SERIAL PRIMARY KEY,
     trigger_id INTEGER REFERENCES goal_race_triggers(id) ON DELETE SET NULL,
-    round_number INTEGER NOT NULL DEFAULT 1, -- номер раунда в рамках одной гонки
+    round_number INTEGER NOT NULL DEFAULT 1, -- Ð½Ð¾Ð¼ÐµÑ€ Ñ€Ð°ÑƒÐ½Ð´Ð° Ð² Ñ€Ð°Ð¼ÐºÐ°Ñ… Ð¾Ð´Ð½Ð¾Ð¹ Ð³Ð¾Ð½ÐºÐ¸
     status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'completed', 'cancelled'
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
@@ -305,7 +296,7 @@ CREATE TABLE IF NOT EXISTS goal_race_rounds (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Участники конкретного раунда
+-- Ð£Ñ‡Ð°ÑÑ‚Ð½Ð¸ÐºÐ¸ ÐºÐ¾Ð½ÐºÑ€ÐµÑ‚Ð½Ð¾Ð³Ð¾ Ñ€Ð°ÑƒÐ½Ð´Ð°
 CREATE TABLE IF NOT EXISTS goal_race_round_participants (
     id SERIAL PRIMARY KEY,
     round_id INTEGER REFERENCES goal_race_rounds(id) ON DELETE CASCADE,
@@ -314,27 +305,27 @@ CREATE TABLE IF NOT EXISTS goal_race_round_participants (
     UNIQUE(round_id, player_id)
 );
 
--- Предопределенные цели для раундов гонки
--- Админ создает эти цели ЗАРАНЕЕ, до запуска гонки
+-- ÐŸÑ€ÐµÐ´Ð¾Ð¿Ñ€ÐµÐ´ÐµÐ»ÐµÐ½Ð½Ñ‹Ðµ Ñ†ÐµÐ»Ð¸ Ð´Ð»Ñ Ñ€Ð°ÑƒÐ½Ð´Ð¾Ð² Ð³Ð¾Ð½ÐºÐ¸
+-- ÐÐ´Ð¼Ð¸Ð½ ÑÐ¾Ð·Ð´Ð°ÐµÑ‚ ÑÑ‚Ð¸ Ñ†ÐµÐ»Ð¸ Ð—ÐÐ ÐÐÐ•Ð•, Ð´Ð¾ Ð·Ð°Ð¿ÑƒÑÐºÐ° Ð³Ð¾Ð½ÐºÐ¸
 CREATE TABLE IF NOT EXISTS goal_race_predefined_goals (
     id SERIAL PRIMARY KEY,
     trigger_id INTEGER REFERENCES goal_race_triggers(id) ON DELETE CASCADE,
-    round_number INTEGER NOT NULL, -- для какого раунда эта цель
-    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- кому назначена цель
+    round_number INTEGER NOT NULL, -- Ð´Ð»Ñ ÐºÐ°ÐºÐ¾Ð³Ð¾ Ñ€Ð°ÑƒÐ½Ð´Ð° ÑÑ‚Ð° Ñ†ÐµÐ»ÑŒ
+    player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- ÐºÐ¾Ð¼Ñƒ Ð½Ð°Ð·Ð½Ð°Ñ‡ÐµÐ½Ð° Ñ†ÐµÐ»ÑŒ
     title VARCHAR(255) NOT NULL,
     description TEXT,
     influence_points_reward INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(trigger_id, round_number, player_id, title) -- один игрок не может получить одинаковую цель в раунде дважды
+    UNIQUE(trigger_id, round_number, player_id, title) -- Ð¾Ð´Ð¸Ð½ Ð¸Ð³Ñ€Ð¾Ðº Ð½Ðµ Ð¼Ð¾Ð¶ÐµÑ‚ Ð¿Ð¾Ð»ÑƒÑ‡Ð¸Ñ‚ÑŒ Ð¾Ð´Ð¸Ð½Ð°ÐºÐ¾Ð²ÑƒÑŽ Ñ†ÐµÐ»ÑŒ Ð² Ñ€Ð°ÑƒÐ½Ð´Ðµ Ð´Ð²Ð°Ð¶Ð´Ñ‹
 );
 
--- Связь целей с раундами гонки (создается при активации раунда)
+-- Ð¡Ð²ÑÐ·ÑŒ Ñ†ÐµÐ»ÐµÐ¹ Ñ Ñ€Ð°ÑƒÐ½Ð´Ð°Ð¼Ð¸ Ð³Ð¾Ð½ÐºÐ¸ (ÑÐ¾Ð·Ð´Ð°ÐµÑ‚ÑÑ Ð¿Ñ€Ð¸ Ð°ÐºÑ‚Ð¸Ð²Ð°Ñ†Ð¸Ð¸ Ñ€Ð°ÑƒÐ½Ð´Ð°)
 CREATE TABLE IF NOT EXISTS goal_race_round_goals (
     id SERIAL PRIMARY KEY,
     round_id INTEGER REFERENCES goal_race_rounds(id) ON DELETE CASCADE,
     goal_id INTEGER REFERENCES goals(id) ON DELETE CASCADE,
     assigned_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-    is_accessible BOOLEAN DEFAULT true, -- false когда раунд завершается
+    is_accessible BOOLEAN DEFAULT true, -- false ÐºÐ¾Ð³Ð´Ð° Ñ€Ð°ÑƒÐ½Ð´ Ð·Ð°Ð²ÐµÑ€ÑˆÐ°ÐµÑ‚ÑÑ
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     became_inaccessible_at TIMESTAMP,
     UNIQUE(round_id, goal_id),
@@ -342,20 +333,20 @@ CREATE TABLE IF NOT EXISTS goal_race_round_goals (
 );
 
 -- ============================================
--- ДОГОВОРЫ
+-- Ð”ÐžÐ“ÐžÐ’ÐžÐ Ð«
 -- ============================================
 
--- Договоры между игроками
+-- Ð”Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ñ‹ Ð¼ÐµÐ¶Ð´Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÐ°Ð¼Ð¸
 CREATE TABLE IF NOT EXISTS contracts (
     id SERIAL PRIMARY KEY,
     contract_type VARCHAR(20) NOT NULL, -- 'type1', 'type2'
     customer_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     executor_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-    customer_faction_id INTEGER REFERENCES factions(id) ON DELETE SET NULL, -- фракция заказчика на момент подписания
+    customer_faction_id INTEGER REFERENCES factions(id) ON DELETE SET NULL, -- Ñ„Ñ€Ð°ÐºÑ†Ð¸Ñ Ð·Ð°ÐºÐ°Ð·Ñ‡Ð¸ÐºÐ° Ð½Ð° Ð¼Ð¾Ð¼ÐµÐ½Ñ‚ Ð¿Ð¾Ð´Ð¿Ð¸ÑÐ°Ð½Ð¸Ñ
     status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'signed', 'completed', 'terminated'
     duration_seconds INTEGER NOT NULL,
-    money_reward_customer INTEGER DEFAULT 0, -- деньги для заказчика
-    money_reward_executor INTEGER DEFAULT 0, -- деньги для исполнителя
+    money_reward_customer INTEGER DEFAULT 0, -- Ð´ÐµÐ½ÑŒÐ³Ð¸ Ð´Ð»Ñ Ð·Ð°ÐºÐ°Ð·Ñ‡Ð¸ÐºÐ°
+    money_reward_executor INTEGER DEFAULT 0, -- Ð´ÐµÐ½ÑŒÐ³Ð¸ Ð´Ð»Ñ Ð¸ÑÐ¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»Ñ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     signed_at TIMESTAMP,
     expires_at TIMESTAMP,
@@ -364,7 +355,15 @@ CREATE TABLE IF NOT EXISTS contracts (
     CHECK (customer_player_id != executor_player_id)
 );
 
--- Настройки награды для контракта типа 1 (вещи по фракциям)
+-- Настройки времени для договоров
+CREATE TABLE IF NOT EXISTS contract_duration_settings (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR(5), -- 'type1', 'type2'
+    duration_minutes INTEGER
+);
+
+
+-- ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ Ð½Ð°Ð³Ñ€Ð°Ð´Ñ‹ Ð´Ð»Ñ ÐºÐ¾Ð½Ñ‚Ñ€Ð°ÐºÑ‚Ð° Ñ‚Ð¸Ð¿Ð° 1 (Ð²ÐµÑ‰Ð¸ Ð¿Ð¾ Ñ„Ñ€Ð°ÐºÑ†Ð¸ÑÐ¼)
 CREATE TABLE IF NOT EXISTS contract_type1_settings (
     id SERIAL PRIMARY KEY,
     faction_id INTEGER REFERENCES factions(id) ON DELETE CASCADE,
@@ -372,14 +371,32 @@ CREATE TABLE IF NOT EXISTS contract_type1_settings (
     UNIQUE(faction_id)
 );
 
--- Настройки штрафов за нарушение договора
+-- ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ Ð½Ð°Ð³Ñ€Ð°Ð´ Ð´Ð»Ñ Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð¾Ð² Type 1
+CREATE TABLE IF NOT EXISTS contract_type1_reward_settings (
+    id SERIAL PRIMARY KEY,
+    money_reward_customer INTEGER DEFAULT 0 CHECK (money_reward_customer >= 0),
+    money_reward_executor INTEGER DEFAULT 0 CHECK (money_reward_executor >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ Ð½Ð°Ð³Ñ€Ð°Ð´ Ð´Ð»Ñ Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð¾Ð² Type 2
+CREATE TABLE IF NOT EXISTS contract_type2_reward_settings (
+    id SERIAL PRIMARY KEY,
+    money_reward_executor INTEGER DEFAULT 0 CHECK (money_reward_executor >= 0),
+    -- money_reward_customer Ð²ÑÐµÐ³Ð´Ð° 0 Ð´Ð»Ñ type2
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ ÑˆÑ‚Ñ€Ð°Ñ„Ð¾Ð² Ð·Ð° Ð½Ð°Ñ€ÑƒÑˆÐµÐ½Ð¸Ðµ Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð°
 CREATE TABLE IF NOT EXISTS contract_penalty_settings (
     id SERIAL PRIMARY KEY,
     money_penalty INTEGER DEFAULT 0,
     influence_penalty INTEGER DEFAULT 0
 );
 
--- История штрафов по договорам
+-- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ ÑˆÑ‚Ñ€Ð°Ñ„Ð¾Ð² Ð¿Ð¾ Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð°Ð¼
 CREATE TABLE IF NOT EXISTS contract_penalties (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
@@ -391,14 +408,14 @@ CREATE TABLE IF NOT EXISTS contract_penalties (
 );
 
 -- ============================================
--- ДОЛГОВЫЕ РАСПИСКИ
+-- Ð”ÐžÐ›Ð“ÐžÐ’Ð«Ð• Ð ÐÐ¡ÐŸÐ˜Ð¡ÐšÐ˜
 -- ============================================
 
--- Долговые расписки
+-- Ð”Ð¾Ð»Ð³Ð¾Ð²Ñ‹Ðµ Ñ€Ð°ÑÐ¿Ð¸ÑÐºÐ¸
 CREATE TABLE IF NOT EXISTS debt_receipts (
     id SERIAL PRIMARY KEY,    
-    lender_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- кредитор
-    borrower_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- заемщик
+    lender_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- ÐºÑ€ÐµÐ´Ð¸Ñ‚Ð¾Ñ€
+    borrower_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE, -- Ð·Ð°ÐµÐ¼Ñ‰Ð¸Ðº
     loan_amount INTEGER NOT NULL CHECK (loan_amount > 0),
     return_amount INTEGER NOT NULL CHECK (return_amount > 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -410,30 +427,30 @@ CREATE TABLE IF NOT EXISTS debt_receipts (
     CHECK (lender_player_id != borrower_player_id)
 );
 
--- Настройки штрафов для долговых расписок
+-- ÐÐ°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ ÑˆÑ‚Ñ€Ð°Ñ„Ð¾Ð² Ð´Ð»Ñ Ð´Ð¾Ð»Ð³Ð¾Ð²Ñ‹Ñ… Ñ€Ð°ÑÐ¿Ð¸ÑÐ¾Ðº
 CREATE TABLE IF NOT EXISTS debt_penalty_settings (
     id SERIAL PRIMARY KEY,
     penalty_influence_points INTEGER DEFAULT 0
 );
 
 -- ============================================
--- ТРАНЗАКЦИИ
+-- Ð¢Ð ÐÐÐ—ÐÐšÐ¦Ð˜Ð˜
 -- ============================================
 
--- Денежные транзакции (для отслеживания админами)
+-- Ð”ÐµÐ½ÐµÐ¶Ð½Ñ‹Ðµ Ñ‚Ñ€Ð°Ð½Ð·Ð°ÐºÑ†Ð¸Ð¸ (Ð´Ð»Ñ Ð¾Ñ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ñ Ð°Ð´Ð¼Ð¸Ð½Ð°Ð¼Ð¸)
 CREATE TABLE IF NOT EXISTS money_transactions (
     id SERIAL PRIMARY KEY,
     from_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
     to_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
     amount INTEGER NOT NULL,
     transaction_type VARCHAR(50) NOT NULL, -- 'transfer', 'contract', 'debt', 'penalty', 'item_effect'
-    reference_id INTEGER, -- ID связанного договора, долга и т.д.
+    reference_id INTEGER, -- ID ÑÐ²ÑÐ·Ð°Ð½Ð½Ð¾Ð³Ð¾ Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð°, Ð´Ð¾Ð»Ð³Ð° Ð¸ Ñ‚.Ð´.
     reference_type VARCHAR(50), -- 'contract', 'debt_receipt', 'effect'
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Транзакции предметов
+-- Ð¢Ñ€Ð°Ð½Ð·Ð°ÐºÑ†Ð¸Ð¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð²
 CREATE TABLE IF NOT EXISTS item_transactions (
     id SERIAL PRIMARY KEY,
     from_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
@@ -446,7 +463,7 @@ CREATE TABLE IF NOT EXISTS item_transactions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Транзакции влияния
+-- Ð¢Ñ€Ð°Ð½Ð·Ð°ÐºÑ†Ð¸Ð¸ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ
 CREATE TABLE IF NOT EXISTS influence_transactions (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
@@ -459,10 +476,10 @@ CREATE TABLE IF NOT EXISTS influence_transactions (
 );
 
 -- ============================================
--- ИГРОВЫЕ НАСТРОЙКИ
+-- Ð˜Ð“Ð ÐžÐ’Ð«Ð• ÐÐÐ¡Ð¢Ð ÐžÐ™ÐšÐ˜
 -- ============================================
 
--- Общие настройки игры
+-- ÐžÐ±Ñ‰Ð¸Ðµ Ð½Ð°ÑÑ‚Ñ€Ð¾Ð¹ÐºÐ¸ Ð¸Ð³Ñ€Ñ‹
 CREATE TABLE IF NOT EXISTS game_settings (
     id SERIAL PRIMARY KEY,
     setting_key VARCHAR(100) NOT NULL UNIQUE,
@@ -471,7 +488,7 @@ CREATE TABLE IF NOT EXISTS game_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Временные метки игры
+-- Ð’Ñ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ðµ Ð¼ÐµÑ‚ÐºÐ¸ Ð¸Ð³Ñ€Ñ‹
 CREATE TABLE IF NOT EXISTS game_timeline (
     id SERIAL PRIMARY KEY,
     game_started_at TIMESTAMP,
@@ -479,10 +496,10 @@ CREATE TABLE IF NOT EXISTS game_timeline (
 );
 
 -- ============================================
--- ИНДЕКСЫ ДЛЯ ПРОИЗВОДИТЕЛЬНОСТИ
+-- Ð˜ÐÐ”Ð•ÐšÐ¡Ð« Ð”Ð›Ð¯ ÐŸÐ ÐžÐ˜Ð—Ð’ÐžÐ”Ð˜Ð¢Ð•Ð›Ð¬ÐÐžÐ¡Ð¢Ð˜
 -- ============================================
 
--- Индексы для частых запросов
+-- Ð˜Ð½Ð´ÐµÐºÑÑ‹ Ð´Ð»Ñ Ñ‡Ð°ÑÑ‚Ñ‹Ñ… Ð·Ð°Ð¿Ñ€Ð¾ÑÐ¾Ð²
 CREATE INDEX idx_players_faction ON players(faction_id);
 CREATE INDEX idx_goals_player ON goals(player_id);
 CREATE INDEX idx_goals_faction ON goals(faction_id);
@@ -498,7 +515,7 @@ CREATE INDEX idx_ability_usage_player ON ability_usage(player_id);
 CREATE INDEX idx_ability_usage_ability ON ability_usage(ability_id);
 CREATE INDEX idx_item_effect_executions_player ON item_effect_executions(player_id);
 
--- Индексы для задач и гонки целей
+-- Ð˜Ð½Ð´ÐµÐºÑÑ‹ Ð´Ð»Ñ Ð·Ð°Ð´Ð°Ñ‡ Ð¸ Ð³Ð¾Ð½ÐºÐ¸ Ñ†ÐµÐ»ÐµÐ¹
 CREATE INDEX idx_tasks_player ON tasks(player_id);
 CREATE INDEX idx_tasks_completed ON tasks(is_completed);
 CREATE INDEX idx_goal_race_rounds_status ON goal_race_rounds(status);
@@ -510,10 +527,10 @@ CREATE INDEX idx_goal_race_round_goals_player ON goal_race_round_goals(assigned_
 CREATE INDEX idx_goal_race_round_goals_accessible ON goal_race_round_goals(is_accessible);
 
 -- ============================================
--- ПРЕДСТАВЛЕНИЯ (VIEWS)
+-- ÐŸÐ Ð•Ð”Ð¡Ð¢ÐÐ’Ð›Ð•ÐÐ˜Ð¯ (VIEWS)
 -- ============================================
 
--- Представление для подсчета общего влияния фракции
+-- ÐŸÑ€ÐµÐ´ÑÑ‚Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ Ð´Ð»Ñ Ð¿Ð¾Ð´ÑÑ‡ÐµÑ‚Ð° Ð¾Ð±Ñ‰ÐµÐ³Ð¾ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ñ„Ñ€Ð°ÐºÑ†Ð¸Ð¸
 CREATE OR REPLACE VIEW faction_total_influence AS
 SELECT 
     f.id AS faction_id,
@@ -526,8 +543,8 @@ LEFT JOIN players p ON p.faction_id = f.id
 GROUP BY f.id, f.name, f.faction_influence;
 
 
--- Представление для видимых целей игрока
--- ОБНОВЛЕНО: Учитывает разблокировки из goal_dependency_unlocks
+-- ÐŸÑ€ÐµÐ´ÑÑ‚Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ Ð´Ð»Ñ Ð²Ð¸Ð´Ð¸Ð¼Ñ‹Ñ… Ñ†ÐµÐ»ÐµÐ¹ Ð¸Ð³Ñ€Ð¾ÐºÐ°
+-- ÐžÐ‘ÐÐžÐ’Ð›Ð•ÐÐž: Ð£Ñ‡Ð¸Ñ‚Ñ‹Ð²Ð°ÐµÑ‚ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð¸Ð· goal_dependency_unlocks
 CREATE OR REPLACE VIEW player_visible_goals AS
 SELECT 
     g.id,
@@ -536,72 +553,72 @@ SELECT
     g.player_id,
     g.influence_points_reward,
     g.is_completed,
-    -- Определяем видимость цели
+    -- ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ð²Ð¸Ð´Ð¸Ð¼Ð¾ÑÑ‚ÑŒ Ñ†ÐµÐ»Ð¸
     CASE 
-        -- Если нет зависимостей - цель видна
+        -- Ð•ÑÐ»Ð¸ Ð½ÐµÑ‚ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹ - Ñ†ÐµÐ»ÑŒ Ð²Ð¸Ð´Ð½Ð°
         WHEN NOT EXISTS (
             SELECT 1 FROM goal_dependencies gd WHERE gd.goal_id = g.id
         ) THEN true
         
-        -- Если есть зависимость с is_visible_before_completion = true - цель видна (но может быть заблокирована)
+        -- Ð•ÑÐ»Ð¸ ÐµÑÑ‚ÑŒ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ñ is_visible_before_completion = true - Ñ†ÐµÐ»ÑŒ Ð²Ð¸Ð´Ð½Ð° (Ð½Ð¾ Ð¼Ð¾Ð¶ÐµÑ‚ Ð±Ñ‹Ñ‚ÑŒ Ð·Ð°Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð°)
         WHEN EXISTS (
             SELECT 1 FROM goal_dependencies gd 
             WHERE gd.goal_id = g.id 
             AND gd.is_visible_before_completion = true
         ) THEN true
         
-        -- Проверяем, выполнены ли ВСЕ условия зависимости (с учетом unlocks!)
+        -- ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼, Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ñ‹ Ð»Ð¸ Ð’Ð¡Ð• ÑƒÑÐ»Ð¾Ð²Ð¸Ñ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ (Ñ ÑƒÑ‡ÐµÑ‚Ð¾Ð¼ unlocks!)
         WHEN NOT EXISTS (
             SELECT 1 FROM goal_dependencies gd
             LEFT JOIN goals rg ON gd.required_goal_id = rg.id
             LEFT JOIN players p ON gd.influence_player_id = p.id
             LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
             WHERE gd.goal_id = g.id 
-            AND gdu.id IS NULL  -- Зависимость ещё не разблокирована
+            AND gdu.id IS NULL  -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ ÐµÑ‰Ñ‘ Ð½Ðµ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð°
             AND (
-                -- Зависимость от цели не выполнена
+                -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¾Ñ‚ Ñ†ÐµÐ»Ð¸ Ð½Ðµ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð°
                 (gd.dependency_type = 'goal_completion' AND (rg.is_completed = false OR rg.is_completed IS NULL))
                 OR
-                -- Зависимость от очков влияния не выполнена
+                -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¾Ñ‚ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð½Ðµ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð°
                 (gd.dependency_type = 'influence_threshold' AND (p.influence < gd.required_influence_points OR p.influence IS NULL))
             )
         ) THEN true
         
-        -- Иначе цель скрыта
+        -- Ð˜Ð½Ð°Ñ‡Ðµ Ñ†ÐµÐ»ÑŒ ÑÐºÑ€Ñ‹Ñ‚Ð°
         ELSE false
     END AS is_visible,
     
-    -- Определяем, заблокирована ли цель (видна, но не может быть выполнена)
+    -- ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼, Ð·Ð°Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð° Ð»Ð¸ Ñ†ÐµÐ»ÑŒ (Ð²Ð¸Ð´Ð½Ð°, Ð½Ð¾ Ð½Ðµ Ð¼Ð¾Ð¶ÐµÑ‚ Ð±Ñ‹Ñ‚ÑŒ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð°)
     CASE 
-        -- Если нет зависимостей - цель доступна
+        -- Ð•ÑÐ»Ð¸ Ð½ÐµÑ‚ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹ - Ñ†ÐµÐ»ÑŒ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð°
         WHEN NOT EXISTS (
             SELECT 1 FROM goal_dependencies gd WHERE gd.goal_id = g.id
         ) THEN false
         
-        -- Проверяем, есть ли невыполненные и неразблокированные зависимости
+        -- ÐŸÑ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼, ÐµÑÑ‚ÑŒ Ð»Ð¸ Ð½ÐµÐ²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð½Ñ‹Ðµ Ð¸ Ð½ÐµÑ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð½Ñ‹Ðµ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸
         WHEN EXISTS (
             SELECT 1 FROM goal_dependencies gd
             LEFT JOIN goals rg ON gd.required_goal_id = rg.id
             LEFT JOIN players p ON gd.influence_player_id = p.id
             LEFT JOIN goal_dependency_unlocks gdu ON gd.id = gdu.dependency_id AND gd.goal_id = gdu.goal_id
             WHERE gd.goal_id = g.id 
-            AND gdu.id IS NULL  -- Зависимость ещё не разблокирована
+            AND gdu.id IS NULL  -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ ÐµÑ‰Ñ‘ Ð½Ðµ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð°
             AND (
-                -- Зависимость от цели не выполнена
+                -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¾Ñ‚ Ñ†ÐµÐ»Ð¸ Ð½Ðµ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð°
                 (gd.dependency_type = 'goal_completion' AND (rg.is_completed = false OR rg.is_completed IS NULL))
                 OR
-                -- Зависимость от очков влияния не выполнена
+                -- Ð—Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÑŒ Ð¾Ñ‚ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ Ð½Ðµ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð°
                 (gd.dependency_type = 'influence_threshold' AND (p.influence < gd.required_influence_points OR p.influence IS NULL))
             )
         ) THEN true
         
-        -- Все условия выполнены или разблокированы - цель доступна
+        -- Ð’ÑÐµ ÑƒÑÐ»Ð¾Ð²Ð¸Ñ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ñ‹ Ð¸Ð»Ð¸ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ñ‹ - Ñ†ÐµÐ»ÑŒ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ð°
         ELSE false
     END AS is_locked
 FROM goals g
 WHERE g.goal_type = 'personal';
 
--- Представление для активных договоров
+-- ÐŸÑ€ÐµÐ´ÑÑ‚Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ Ð´Ð»Ñ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ñ… Ð´Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ð¾Ð²
 CREATE OR REPLACE VIEW active_contracts AS
 SELECT 
     c.*,
@@ -614,7 +631,7 @@ JOIN players executor ON c.executor_player_id = executor.id
 LEFT JOIN factions customer_faction ON c.customer_faction_id = customer_faction.id
 WHERE c.status IN ('pending', 'signed') AND (c.expires_at IS NULL OR c.expires_at > CURRENT_TIMESTAMP);
 
--- Счетчик выполненных задач по игрокам
+-- Ð¡Ñ‡ÐµÑ‚Ñ‡Ð¸Ðº Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð½Ñ‹Ñ… Ð·Ð°Ð´Ð°Ñ‡ Ð¿Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ°Ð¼
 CREATE OR REPLACE VIEW player_tasks_stats AS
 SELECT 
     player_id,
@@ -624,7 +641,7 @@ SELECT
 FROM tasks
 GROUP BY player_id;
 
--- Активные раунды гонки
+-- ÐÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ Ñ€Ð°ÑƒÐ½Ð´Ñ‹ Ð³Ð¾Ð½ÐºÐ¸
 CREATE OR REPLACE VIEW active_goal_race_rounds AS
 SELECT 
     grr.*,
@@ -636,7 +653,7 @@ LEFT JOIN goal_race_round_goals grrg ON grr.id = grrg.round_id
 WHERE grr.status = 'active'
 GROUP BY grr.id;
 
--- Прогресс игрока в текущих гонках
+-- ÐŸÑ€Ð¾Ð³Ñ€ÐµÑÑ Ð¸Ð³Ñ€Ð¾ÐºÐ° Ð² Ñ‚ÐµÐºÑƒÑ‰Ð¸Ñ… Ð³Ð¾Ð½ÐºÐ°Ñ…
 CREATE OR REPLACE VIEW player_race_progress AS
 SELECT 
     grrp.player_id,
@@ -653,30 +670,30 @@ LEFT JOIN goals g ON grrg.goal_id = g.id
 GROUP BY grrp.player_id, grrp.round_id, grr.round_number, grr.status;
 
 -- ============================================
--- КОММЕНТАРИИ К ТАБЛИЦАМ
+-- ÐšÐžÐœÐœÐ•ÐÐ¢ÐÐ Ð˜Ð˜ Ðš Ð¢ÐÐ‘Ð›Ð˜Ð¦ÐÐœ
 -- ============================================
 
-COMMENT ON TABLE factions IS 'Фракции в игре (дворец, мафия и т.д.)';
-COMMENT ON TABLE players IS 'Игроки и их персонажи';
-COMMENT ON TABLE items IS 'Предметы в игре';
-COMMENT ON TABLE effects IS 'Эффекты, которые могут иметь предметы';
-COMMENT ON TABLE abilities IS 'Уникальные способности игроков';
-COMMENT ON TABLE goals IS 'Личные и фракционные цели';
-COMMENT ON TABLE contracts IS 'Договоры между игроками';
-COMMENT ON TABLE debt_receipts IS 'Долговые расписки';
-COMMENT ON TABLE money_transactions IS 'История денежных транзакций для отслеживания админами';
-COMMENT ON TABLE item_transactions IS 'История передачи предметов';
-COMMENT ON TABLE influence_transactions IS 'История изменения очков влияния';
-COMMENT ON TABLE tasks IS 'Задачи игроков (отличаются от целей)';
-COMMENT ON TABLE goal_race_triggers IS 'Условия для запуска гонок целей';
-COMMENT ON TABLE goal_race_rounds IS 'Раунды гонки целей';
-COMMENT ON TABLE goal_race_predefined_goals IS 'Заранее созданные цели для будущих раундов гонки';
-COMMENT ON TABLE goal_race_round_goals IS 'Назначение целей игрокам в рамках раунда';
-COMMENT ON COLUMN goal_race_round_goals.is_accessible IS 'Становится false когда другой игрок завершает раунд';
-COMMENT ON COLUMN goal_race_rounds.round_number IS 'Порядковый номер раунда в рамках одной гонки';
-COMMENT ON COLUMN goal_race_rounds.status IS 'pending - создан, но не начат; active - текущий; completed - завершен; cancelled - отменен';
+COMMENT ON TABLE factions IS 'Ð¤Ñ€Ð°ÐºÑ†Ð¸Ð¸ Ð² Ð¸Ð³Ñ€Ðµ (Ð´Ð²Ð¾Ñ€ÐµÑ†, Ð¼Ð°Ñ„Ð¸Ñ Ð¸ Ñ‚.Ð´.)';
+COMMENT ON TABLE players IS 'Ð˜Ð³Ñ€Ð¾ÐºÐ¸ Ð¸ Ð¸Ñ… Ð¿ÐµÑ€ÑÐ¾Ð½Ð°Ð¶Ð¸';
+COMMENT ON TABLE items IS 'ÐŸÑ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹ Ð² Ð¸Ð³Ñ€Ðµ';
+COMMENT ON TABLE effects IS 'Ð­Ñ„Ñ„ÐµÐºÑ‚Ñ‹, ÐºÐ¾Ñ‚Ð¾Ñ€Ñ‹Ðµ Ð¼Ð¾Ð³ÑƒÑ‚ Ð¸Ð¼ÐµÑ‚ÑŒ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹';
+COMMENT ON TABLE abilities IS 'Ð£Ð½Ð¸ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ ÑÐ¿Ð¾ÑÐ¾Ð±Ð½Ð¾ÑÑ‚Ð¸ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð²';
+COMMENT ON TABLE goals IS 'Ð›Ð¸Ñ‡Ð½Ñ‹Ðµ Ð¸ Ñ„Ñ€Ð°ÐºÑ†Ð¸Ð¾Ð½Ð½Ñ‹Ðµ Ñ†ÐµÐ»Ð¸';
+COMMENT ON TABLE contracts IS 'Ð”Ð¾Ð³Ð¾Ð²Ð¾Ñ€Ñ‹ Ð¼ÐµÐ¶Ð´Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÐ°Ð¼Ð¸';
+COMMENT ON TABLE debt_receipts IS 'Ð”Ð¾Ð»Ð³Ð¾Ð²Ñ‹Ðµ Ñ€Ð°ÑÐ¿Ð¸ÑÐºÐ¸';
+COMMENT ON TABLE money_transactions IS 'Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð´ÐµÐ½ÐµÐ¶Ð½Ñ‹Ñ… Ñ‚Ñ€Ð°Ð½Ð·Ð°ÐºÑ†Ð¸Ð¹ Ð´Ð»Ñ Ð¾Ñ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ñ Ð°Ð´Ð¼Ð¸Ð½Ð°Ð¼Ð¸';
+COMMENT ON TABLE item_transactions IS 'Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð¿ÐµÑ€ÐµÐ´Ð°Ñ‡Ð¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð²';
+COMMENT ON TABLE influence_transactions IS 'Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ñ Ð¾Ñ‡ÐºÐ¾Ð² Ð²Ð»Ð¸ÑÐ½Ð¸Ñ';
+COMMENT ON TABLE tasks IS 'Ð—Ð°Ð´Ð°Ñ‡Ð¸ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð² (Ð¾Ñ‚Ð»Ð¸Ñ‡Ð°ÑŽÑ‚ÑÑ Ð¾Ñ‚ Ñ†ÐµÐ»ÐµÐ¹)';
+COMMENT ON TABLE goal_race_triggers IS 'Ð£ÑÐ»Ð¾Ð²Ð¸Ñ Ð´Ð»Ñ Ð·Ð°Ð¿ÑƒÑÐºÐ° Ð³Ð¾Ð½Ð¾Ðº Ñ†ÐµÐ»ÐµÐ¹';
+COMMENT ON TABLE goal_race_rounds IS 'Ð Ð°ÑƒÐ½Ð´Ñ‹ Ð³Ð¾Ð½ÐºÐ¸ Ñ†ÐµÐ»ÐµÐ¹';
+COMMENT ON TABLE goal_race_predefined_goals IS 'Ð—Ð°Ñ€Ð°Ð½ÐµÐµ ÑÐ¾Ð·Ð´Ð°Ð½Ð½Ñ‹Ðµ Ñ†ÐµÐ»Ð¸ Ð´Ð»Ñ Ð±ÑƒÐ´ÑƒÑ‰Ð¸Ñ… Ñ€Ð°ÑƒÐ½Ð´Ð¾Ð² Ð³Ð¾Ð½ÐºÐ¸';
+COMMENT ON TABLE goal_race_round_goals IS 'ÐÐ°Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ Ñ†ÐµÐ»ÐµÐ¹ Ð¸Ð³Ñ€Ð¾ÐºÐ°Ð¼ Ð² Ñ€Ð°Ð¼ÐºÐ°Ñ… Ñ€Ð°ÑƒÐ½Ð´Ð°';
+COMMENT ON COLUMN goal_race_round_goals.is_accessible IS 'Ð¡Ñ‚Ð°Ð½Ð¾Ð²Ð¸Ñ‚ÑÑ false ÐºÐ¾Ð³Ð´Ð° Ð´Ñ€ÑƒÐ³Ð¾Ð¹ Ð¸Ð³Ñ€Ð¾Ðº Ð·Ð°Ð²ÐµÑ€ÑˆÐ°ÐµÑ‚ Ñ€Ð°ÑƒÐ½Ð´';
+COMMENT ON COLUMN goal_race_rounds.round_number IS 'ÐŸÐ¾Ñ€ÑÐ´ÐºÐ¾Ð²Ñ‹Ð¹ Ð½Ð¾Ð¼ÐµÑ€ Ñ€Ð°ÑƒÐ½Ð´Ð° Ð² Ñ€Ð°Ð¼ÐºÐ°Ñ… Ð¾Ð´Ð½Ð¾Ð¹ Ð³Ð¾Ð½ÐºÐ¸';
+COMMENT ON COLUMN goal_race_rounds.status IS 'pending - ÑÐ¾Ð·Ð´Ð°Ð½, Ð½Ð¾ Ð½Ðµ Ð½Ð°Ñ‡Ð°Ñ‚; active - Ñ‚ÐµÐºÑƒÑ‰Ð¸Ð¹; completed - Ð·Ð°Ð²ÐµÑ€ÑˆÐµÐ½; cancelled - Ð¾Ñ‚Ð¼ÐµÐ½ÐµÐ½';
 
--- Таблица пользователей для авторизации
+-- Ð¢Ð°Ð±Ð»Ð¸Ñ†Ð° Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»ÐµÐ¹ Ð´Ð»Ñ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ð¸
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
@@ -685,13 +702,13 @@ CREATE TABLE IF NOT EXISTS users (
     is_admin BOOLEAN DEFAULT false
 );
 
--- Индекс для быстрого поиска по username
+-- Ð˜Ð½Ð´ÐµÐºÑ Ð´Ð»Ñ Ð±Ñ‹ÑÑ‚Ñ€Ð¾Ð³Ð¾ Ð¿Ð¾Ð¸ÑÐºÐ° Ð¿Ð¾ username
 CREATE INDEX idx_users_username ON users(username);
 
-COMMENT ON TABLE users IS 'Пользователи системы для авторизации';
-COMMENT ON COLUMN users.player_id IS 'Связь с персонажем игрока (может быть NULL для админов без персонажа)';
-COMMENT ON COLUMN users.is_admin IS 'Флаг администратора системы';
--- Дополнительные индексы для новых таблиц зависимостей
+COMMENT ON TABLE users IS 'ÐŸÐ¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»Ð¸ ÑÐ¸ÑÑ‚ÐµÐ¼Ñ‹ Ð´Ð»Ñ Ð°Ð²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ð¸';
+COMMENT ON COLUMN users.player_id IS 'Ð¡Ð²ÑÐ·ÑŒ Ñ Ð¿ÐµÑ€ÑÐ¾Ð½Ð°Ð¶ÐµÐ¼ Ð¸Ð³Ñ€Ð¾ÐºÐ° (Ð¼Ð¾Ð¶ÐµÑ‚ Ð±Ñ‹Ñ‚ÑŒ NULL Ð´Ð»Ñ Ð°Ð´Ð¼Ð¸Ð½Ð¾Ð² Ð±ÐµÐ· Ð¿ÐµÑ€ÑÐ¾Ð½Ð°Ð¶Ð°)';
+COMMENT ON COLUMN users.is_admin IS 'Ð¤Ð»Ð°Ð³ Ð°Ð´Ð¼Ð¸Ð½Ð¸ÑÑ‚Ñ€Ð°Ñ‚Ð¾Ñ€Ð° ÑÐ¸ÑÑ‚ÐµÐ¼Ñ‹';
+-- Ð”Ð¾Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ñ‹Ðµ Ð¸Ð½Ð´ÐµÐºÑÑ‹ Ð´Ð»Ñ Ð½Ð¾Ð²Ñ‹Ñ… Ñ‚Ð°Ð±Ð»Ð¸Ñ† Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹
 CREATE INDEX idx_goal_dependencies_goal ON goal_dependencies(goal_id);
 CREATE INDEX idx_goal_dependencies_required_goal ON goal_dependencies(required_goal_id);
 CREATE INDEX idx_goal_dependencies_influence_player ON goal_dependencies(influence_player_id);
@@ -702,14 +719,14 @@ CREATE INDEX idx_goal_dependency_unlocks_dependency ON goal_dependency_unlocks(d
 CREATE INDEX idx_goal_dependency_unlocks_player ON goal_dependency_unlocks(player_id);
 
 -- ============================================
--- ТРИГГЕРЫ ДЛЯ АВТОМАТИЧЕСКОЙ РАЗБЛОКИРОВКИ
+-- Ð¢Ð Ð˜Ð“Ð“Ð•Ð Ð« Ð”Ð›Ð¯ ÐÐ’Ð¢ÐžÐœÐÐ¢Ð˜Ð§Ð•Ð¡ÐšÐžÐ™ Ð ÐÐ—Ð‘Ð›ÐžÐšÐ˜Ð ÐžÐ’ÐšÐ˜
 -- ============================================
 
--- Функция для автоматической разблокировки зависимостей при изменении влияния
+-- Ð¤ÑƒÐ½ÐºÑ†Ð¸Ñ Ð´Ð»Ñ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹ Ð¿Ñ€Ð¸ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ð¸ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ
 CREATE OR REPLACE FUNCTION unlock_goal_dependencies_on_influence_change()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Когда у игрока меняется influence, проверяем все зависимости от его влияния
+    -- ÐšÐ¾Ð³Ð´Ð° Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÐ° Ð¼ÐµÐ½ÑÐµÑ‚ÑÑ influence, Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼ Ð²ÑÐµ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ ÐµÐ³Ð¾ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ
     INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id)
     SELECT 
         gd.goal_id,
@@ -721,14 +738,14 @@ BEGIN
     WHERE gd.dependency_type = 'influence_threshold'
         AND gd.influence_player_id = NEW.id
         AND NEW.influence >= gd.required_influence_points
-        AND gdu.id IS NULL  -- Ещё не разблокировано
+        AND gdu.id IS NULL  -- Ð•Ñ‰Ñ‘ Ð½Ðµ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð¾
     ON CONFLICT (goal_id, dependency_id) DO NOTHING;
     
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Триггер для автоматической разблокировки при изменении влияния
+-- Ð¢Ñ€Ð¸Ð³Ð³ÐµÑ€ Ð´Ð»Ñ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð¿Ñ€Ð¸ Ð¸Ð·Ð¼ÐµÐ½ÐµÐ½Ð¸Ð¸ Ð²Ð»Ð¸ÑÐ½Ð¸Ñ
 DROP TRIGGER IF EXISTS trigger_unlock_on_influence_change ON players;
 CREATE TRIGGER trigger_unlock_on_influence_change
     AFTER UPDATE OF influence ON players
@@ -736,11 +753,11 @@ CREATE TRIGGER trigger_unlock_on_influence_change
     WHEN (OLD.influence IS DISTINCT FROM NEW.influence)
     EXECUTE FUNCTION unlock_goal_dependencies_on_influence_change();
 
--- Функция для автоматической разблокировки зависимостей при выполнении целей
+-- Ð¤ÑƒÐ½ÐºÑ†Ð¸Ñ Ð´Ð»Ñ Ð°Ð²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚ÐµÐ¹ Ð¿Ñ€Ð¸ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ð¸ Ñ†ÐµÐ»ÐµÐ¹
 CREATE OR REPLACE FUNCTION unlock_goal_dependencies_on_goal_completion()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Когда цель выполняется, разблокируем все зависимости от неё
+    -- ÐšÐ¾Ð³Ð´Ð° Ñ†ÐµÐ»ÑŒ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÑÐµÑ‚ÑÑ, Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€ÑƒÐµÐ¼ Ð²ÑÐµ Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ Ð½ÐµÑ‘
     INSERT INTO goal_dependency_unlocks (goal_id, dependency_id, player_id)
     SELECT 
         gd.goal_id,
@@ -752,29 +769,16 @@ BEGIN
     WHERE gd.dependency_type = 'goal_completion'
         AND gd.required_goal_id = NEW.id
         AND NEW.is_completed = true
-        AND gdu.id IS NULL  -- Ещё не разблокировано
+        AND gdu.id IS NULL  -- Ð•Ñ‰Ñ‘ Ð½Ðµ Ñ€Ð°Ð·Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²Ð°Ð½Ð¾
     ON CONFLICT (goal_id, dependency_id) DO NOTHING;
     
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Триггер для автоматической разблокировки при выполнении целей
 DROP TRIGGER IF EXISTS trigger_unlock_on_goal_completion ON goals;
 CREATE TRIGGER trigger_unlock_on_goal_completion
     AFTER UPDATE OF is_completed ON goals
     FOR EACH ROW
     WHEN (OLD.is_completed IS DISTINCT FROM NEW.is_completed AND NEW.is_completed = true)
     EXECUTE FUNCTION unlock_goal_dependencies_on_goal_completion();
-
--- ============================================
--- ДОПОЛНИТЕЛЬНЫЕ КОММЕНТАРИИ К НОВЫМ ТАБЛИЦАМ
--- ============================================
-
-COMMENT ON TABLE goal_dependencies IS 'Зависимости целей от выполнения других целей или от количества очков влияния других игроков. Поддерживает множественные зависимости.';
-COMMENT ON TABLE goal_dependency_unlocks IS 'История разблокировок зависимостей - разблокированная зависимость остаётся разблокированной навсегда, даже если условие перестало выполняться';
-COMMENT ON COLUMN goal_dependencies.dependency_type IS 'Тип зависимости: goal_completion (от выполнения цели) или influence_threshold (от порога влияния)';
-COMMENT ON COLUMN goal_dependencies.is_visible_before_completion IS 'false = цель полностью скрыта до выполнения условия; true = цель видна, но отмечена как заблокированная';
-COMMENT ON COLUMN goal_dependency_unlocks.unlocked_at IS 'Время когда зависимость была разблокирована. После этого цель остаётся доступной навсегда.';
-COMMENT ON VIEW player_visible_goals IS 'Представление для определения видимости и доступности личных целей с учётом постоянных разблокировок';
-COMMENT ON COLUMN player_visible_goals.is_locked IS 'true = цель видна, но заблокирована (есть невыполненные зависимости); false = цель доступна для выполнения';

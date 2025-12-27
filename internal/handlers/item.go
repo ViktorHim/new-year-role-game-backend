@@ -1,26 +1,32 @@
-// internal/handlers/item.go
+// internal/handlers/item_with_scheduler.go
 package handlers
 
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"new-year-role-game-backend/internal/models"
+	"new-year-role-game-backend/internal/workers"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-type ItemHandler struct {
-	db *sql.DB
+type ItemHandlerWithScheduler struct {
+	db        *sql.DB
+	scheduler *workers.EffectsScheduler
 }
 
-func NewItemHandler(db *sql.DB) *ItemHandler {
-	return &ItemHandler{db: db}
+func NewItemHandlerWithScheduler(db *sql.DB, scheduler *workers.EffectsScheduler) *ItemHandlerWithScheduler {
+	return &ItemHandlerWithScheduler{
+		db:        db,
+		scheduler: scheduler,
+	}
 }
 
 // GetPlayerInventory возвращает инвентарь игрока
-func (h *ItemHandler) GetPlayerInventory(c *gin.Context) {
+func (h *ItemHandlerWithScheduler) GetPlayerInventory(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
@@ -86,7 +92,7 @@ func (h *ItemHandler) GetPlayerInventory(c *gin.Context) {
 }
 
 // getItemEffects - вспомогательная функция для получения эффектов предмета
-func (h *ItemHandler) getItemEffects(itemID int) ([]models.Effect, error) {
+func (h *ItemHandlerWithScheduler) getItemEffects(itemID int) ([]models.Effect, error) {
 	rows, err := h.db.Query(`
 		SELECT 
 			e.id,
@@ -135,7 +141,7 @@ func (h *ItemHandler) getItemEffects(itemID int) ([]models.Effect, error) {
 }
 
 // TransferItem передает предмет другому игроку
-func (h *ItemHandler) TransferItem(c *gin.Context) {
+func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
@@ -237,17 +243,12 @@ func (h *ItemHandler) TransferItem(c *gin.Context) {
 		return
 	}
 
-	// УСТАНОВКА ТАЙМЕРОВ: Инициализируем таймеры эффектов для нового владельца
-	// Устанавливаем last_executed_at = NOW(), чтобы новый владелец мог использовать
-	// эффекты только через period_seconds (не сразу)
 	now := time.Now()
+
+	// Инициализируем таймеры эффектов для нового владельца
 	_, err = tx.Exec(`
 		INSERT INTO item_effect_executions (player_id, item_id, effect_id, last_executed_at)
-		SELECT 
-			$1,
-			ie.item_id,
-			ie.effect_id,
-			$2
+		SELECT $1, ie.item_id, ie.effect_id, $2
 		FROM item_effects ie
 		WHERE ie.item_id = $3
 		ON CONFLICT (player_id, item_id, effect_id) 
@@ -256,6 +257,17 @@ func (h *ItemHandler) TransferItem(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize effect timers for recipient"})
+		return
+	}
+
+	// Удаляем записи о выполнении эффектов у старого владельца
+	_, err = tx.Exec(`
+		DELETE FROM item_effect_executions
+		WHERE player_id = $1 AND item_id = $2
+	`, *playerID, req.ItemID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clean up old effect timers"})
 		return
 	}
 
@@ -276,6 +288,13 @@ func (h *ItemHandler) TransferItem(c *gin.Context) {
 		return
 	}
 
+	// ВАЖНО: Обновляем таймеры в scheduler
+	// 1. Отменяем таймеры у старого владельца
+	h.scheduler.CancelAllEffectsForItem(*playerID, req.ItemID)
+
+	// 2. Создаём новые таймеры для нового владельца
+	h.scheduleItemEffectsForPlayer(req.ToPlayerID, req.ItemID, now)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Item transferred successfully",
 		"item_id":      req.ItemID,
@@ -283,8 +302,36 @@ func (h *ItemHandler) TransferItem(c *gin.Context) {
 	})
 }
 
+// scheduleItemEffectsForPlayer создаёт таймеры для всех эффектов предмета
+func (h *ItemHandlerWithScheduler) scheduleItemEffectsForPlayer(playerID, itemID int, baseTime time.Time) {
+	// Получаем все эффекты предмета
+	rows, err := h.db.Query(`
+		SELECT e.id, e.period_seconds
+		FROM item_effects ie
+		JOIN effects e ON ie.effect_id = e.id
+		WHERE ie.item_id = $1
+	`, itemID)
+	if err != nil {
+		log.Printf("Failed to load effects for item %d: %v", itemID, err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var effectID, periodSeconds int
+		if err := rows.Scan(&effectID, &periodSeconds); err != nil {
+			log.Printf("Failed to scan effect: %v", err)
+			continue
+		}
+
+		// Следующее выполнение = baseTime + period
+		nextExecutionTime := baseTime.Add(time.Duration(periodSeconds) * time.Second)
+		h.scheduler.ScheduleEffect(playerID, itemID, effectID, nextExecutionTime, periodSeconds)
+	}
+}
+
 // TransferMoney переводит деньги другому игроку
-func (h *ItemHandler) TransferMoney(c *gin.Context) {
+func (h *ItemHandlerWithScheduler) TransferMoney(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
@@ -424,7 +471,7 @@ func (h *ItemHandler) TransferMoney(c *gin.Context) {
 }
 
 // GetItemEffectsStatus возвращает статус всех эффектов предметов игрока
-func (h *ItemHandler) GetItemEffectsStatus(c *gin.Context) {
+func (h *ItemHandlerWithScheduler) GetItemEffectsStatus(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Player ID not found in token"})
@@ -503,24 +550,4 @@ func (h *ItemHandler) GetItemEffectsStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, models.ItemEffectsStatusResponse{Effects: effects})
-}
-
-// calculateEffectValue вычисляет значение эффекта с учетом операции
-func (h *ItemHandler) calculateEffectValue(value int, operation string) int {
-	// Пока что поддерживаем только операцию 'add'
-	// В будущем можно добавить 'mul', 'sub', 'div' с базовым значением
-	switch operation {
-	case "add":
-		return value
-	case "mul":
-		// Для умножения нужно базовое значение, пока возвращаем как есть
-		return value
-	case "sub":
-		return -value
-	case "div":
-		// Для деления нужно базовое значение, пока возвращаем как есть
-		return value
-	default:
-		return value
-	}
 }

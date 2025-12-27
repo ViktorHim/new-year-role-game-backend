@@ -96,17 +96,17 @@ INSERT INTO items (name, description) VALUES
 
 INSERT INTO effects (description, effect_type, generated_resource, operation, value, spawned_item_id, period_seconds) VALUES
 -- Генерация денег
-('Приносит 100 золотых каждый час', 'generate_money', 'money', 'add', 100, NULL, 3600),
-('Приносит 50 золотых каждые 30 минут', 'generate_money', 'money', 'add', 50, NULL, 1800),
-('Приносит 200 золотых каждые 2 часа', 'generate_money', 'money', 'add', 200, NULL, 7200),
+('Приносит 100 золотых каждый час', 'generate_money', 'money', 'add', 100, NULL, 30),
+('Приносит 50 золотых каждые 30 минут', 'generate_money', 'money', 'add', 50, NULL, 50),
+('Приносит 200 золотых каждые 2 часа', 'generate_money', 'money', 'add', 200, NULL, 60),
 
 -- Генерация влияния
-('Приносит 5 очков влияния каждый час', 'generate_influence', 'influence', 'add', 5, NULL, 3600),
-('Приносит 10 очков влияния каждые 2 часа', 'generate_influence', 'influence', 'add', 10, NULL, 7200),
+('Приносит 5 очков влияния каждый час', 'generate_influence', 'influence', 'add', 5, NULL, 80),
+('Приносит 10 очков влияния каждые 2 часа', 'generate_influence', 'influence', 'add', 10, NULL, 90),
 
 -- Спавн предметов
-('Генерирует золотой слиток каждые 3 часа', 'spawn_item', NULL, 'add', NULL, 3, 10800),
-('Генерирует лечебное зелье каждый час', 'spawn_item', NULL, 'add', NULL, 4, 3600);
+('Генерирует золотой слиток каждые 3 часа', 'spawn_item', NULL, 'add', NULL, 3, 110),
+('Генерирует лечебное зелье каждый час', 'spawn_item', NULL, 'add', NULL, 4, 130);
 
 -- ============================================
 -- СВЯЗЬ ПРЕДМЕТОВ И ЭФФЕКТОВ
@@ -409,7 +409,7 @@ INSERT INTO contracts (contract_type, customer_player_id, executor_player_id, cu
 ('type1', 1, 7, 1, 'signed', 86400, 0, 300, NOW(), NOW() + INTERVAL '1 day'),
 
 -- Ожидающий подписания
-('type2', 4, 12, 2, 'pending', 43200, 0, 500, NULL, NULL),
+('type2', 4, 12, 2, 'pending', 60, 0, 500, NULL, NULL),
 
 -- Завершенный договор
 ('type1', 7, 11, 3, 'completed', 3600, 0, 200, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour');
@@ -482,6 +482,20 @@ INSERT INTO game_settings (setting_key, setting_value, description) VALUES
 ('contract_penalty_enabled', 'true', 'Включены ли штрафы за нарушение договоров'),
 ('debt_penalty_enabled', 'true', 'Включены ли штрафы за просрочку долгов'),
 ('goal_race_enabled', 'true', 'Включена ли система гонки целей');
+
+-- Вставляем дефолтные значения
+INSERT INTO contract_type1_reward_settings (money_reward_customer, money_reward_executor)
+VALUES (200, 150)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO contract_type2_reward_settings (money_reward_executor)
+VALUES (300)
+ON CONFLICT DO NOTHING;
+
+-- Обновляем настройки штрафов если их нет
+INSERT INTO contract_penalty_settings (money_penalty, influence_penalty)
+SELECT 100, 10
+WHERE NOT EXISTS (SELECT 1 FROM contract_penalty_settings);
 
 -- ============================================
 -- ВРЕМЕННАЯ МЕТКА ИГРЫ
