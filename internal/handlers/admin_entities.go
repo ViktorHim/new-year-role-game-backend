@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -396,7 +397,7 @@ func (h *AdminEntitiesHandler) GetPlayer(c *gin.Context) {
 	c.JSON(http.StatusOK, player)
 }
 
-// CreatePlayer создает нового игрока
+// CreatePlayer создает нового игрока и пользователя для него
 func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 	var req PlayerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -404,9 +405,21 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 		return
 	}
 
+	// Генерируем username из имени персонажа (lowercase, убираем пробелы)
+	username := strings.ToLower(strings.ReplaceAll(req.CharacterName, " ", ""))
+
+	// Начинаем транзакцию
+	tx, err := h.db.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Создаем игрока
 	var playerID int
-	err := h.db.QueryRow(`
-		INSERT INTO players (character_name, password, character_story, role, money, 
+	err = tx.QueryRow(`
+		INSERT INTO players (character_name, password, character_story, role, money,
 		                     influence, faction_id, can_change_faction, avatar)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
@@ -418,13 +431,40 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 		return
 	}
 
+	// Проверяем, существует ли уже пользователь с таким username
+	var existingUserID int
+	err = tx.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&existingUserID)
+
+	// Если username занят, добавляем суффикс с ID игрока
+	if err == nil {
+		username = username + "_" + strconv.Itoa(playerID)
+	}
+
+	// Создаем пользователя для авторизации
+	_, err = tx.Exec(`
+		INSERT INTO users (username, password, player_id, is_admin)
+		VALUES ($1, $2, $3, false)
+	`, username, req.Password, playerID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user account"})
+		return
+	}
+
+	// Коммитим транзакцию
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Player created successfully",
 		"player_id": playerID,
+		"username":  username,
 	})
 }
 
-// UpdatePlayer обновляет игрока
+// UpdatePlayer обновляет игрока и его учетную запись
 func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 	playerIDStr := c.Param("id")
 	playerID, err := strconv.Atoi(playerIDStr)
@@ -439,7 +479,16 @@ func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 		return
 	}
 
-	result, err := h.db.Exec(`
+	// Начинаем транзакцию
+	tx, err := h.db.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Обновляем игрока
+	result, err := tx.Exec(`
 		UPDATE players
 		SET character_name = $1, password = $2, character_story = $3, role = $4,
 		    money = $5, influence = $6, faction_id = $7, can_change_faction = $8, avatar = $9
@@ -455,6 +504,24 @@ func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
+		return
+	}
+
+	// Обновляем пароль пользователя в таблице users
+	_, err = tx.Exec(`
+		UPDATE users
+		SET password = $1
+		WHERE player_id = $2
+	`, req.Password, playerID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user password"})
+		return
+	}
+
+	// Коммитим транзакцию
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
 
