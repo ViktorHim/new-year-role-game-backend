@@ -14,14 +14,14 @@ CREATE TABLE IF NOT EXISTS factions (
 CREATE TABLE IF NOT EXISTS players (
     id SERIAL PRIMARY KEY,
     character_name VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    password VARCHAR(255),
     character_story TEXT,
     role VARCHAR(100) NOT NULL,
     money INTEGER DEFAULT 0 CHECK (money >= 0),
     influence INTEGER DEFAULT 0,
     faction_id INTEGER REFERENCES factions(id) ON DELETE SET NULL,
     can_change_faction BOOLEAN DEFAULT false,
-    avatar TEXT -- изображение в формате base64
+    avatar TEXT DEFAULT NULL-- изображение в формате base64
 );
 
 -- информация о других игроках
