@@ -25,7 +25,7 @@ func NewContractHandlerWithScheduler(db *sql.DB, scheduler *workers.ContractSche
 	}
 }
 
-// SignContract - заказчик подписывает договор
+// SignContract - заказчик подписывает договор (ТОЛЬКО для type1)
 func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
@@ -57,18 +57,20 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 	// Получаем информацию о договоре
 	var contract struct {
 		Status           string
+		ContractType     string
 		CustomerPlayerID int
 		ExecutorPlayerID int
 		DurationSeconds  int
 	}
 
 	err = tx.QueryRow(`
-		SELECT status, customer_player_id, executor_player_id, duration_seconds
+		SELECT status, contract_type, customer_player_id, executor_player_id, duration_seconds
 		FROM contracts
 		WHERE id = $1
 		FOR UPDATE
 	`, contractID).Scan(
 		&contract.Status,
+		&contract.ContractType,
 		&contract.CustomerPlayerID,
 		&contract.ExecutorPlayerID,
 		&contract.DurationSeconds,
@@ -80,6 +82,12 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Проверяем, что это договор type1 (type2 создается сразу подписанным)
+	if contract.ContractType != "type1" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only type1 contracts require signing"})
 		return
 	}
 
@@ -95,7 +103,7 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 		return
 	}
 
-	// Получаем фракцию заказчика и проверяем конфликты
+	// Получаем фракцию заказчика и проверяем конфликты ТОЛЬКО для type1
 	var customerFactionID *int
 	err = tx.QueryRow(`
 		SELECT faction_id FROM players WHERE id = $1
@@ -106,7 +114,7 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 		return
 	}
 
-	// Проверяем наличие активных договоров с другими фракциями
+	// Проверяем наличие активных договоров с другими фракциями (ТОЛЬКО для type1)
 	if customerFactionID != nil {
 		var conflictingFactionID *int
 		err = tx.QueryRow(`
@@ -120,6 +128,7 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 			)
 			WHERE (c.customer_player_id = $1 OR c.executor_player_id = $1)
 			  AND c.status = 'signed'
+			  AND c.contract_type = 'type1'
 			  AND p.faction_id IS NOT NULL
 			  AND p.faction_id != $2
 			LIMIT 1
@@ -235,7 +244,7 @@ func (h *ContractHandlerWithScheduler) SignContract(c *gin.Context) {
 	})
 }
 
-// CompleteContract - заказчик завершает договор вручную
+// CompleteContract - заказчик завершает договор вручную (ТОЛЬКО для type1)
 func (h *ContractHandlerWithScheduler) CompleteContract(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
@@ -271,14 +280,14 @@ func (h *ContractHandlerWithScheduler) CompleteContract(c *gin.Context) {
 		CustomerPlayerID    int
 		ExecutorPlayerID    int
 		CustomerFactionID   *int
-		ExpiresAt           *time.Time
 		MoneyRewardCustomer int
 		MoneyRewardExecutor int
+		ExpiresAt           *time.Time
 	}
 
 	err = tx.QueryRow(`
-		SELECT status, contract_type, customer_player_id, executor_player_id, 
-		       customer_faction_id, expires_at, money_reward_customer, money_reward_executor
+		SELECT status, contract_type, customer_player_id, executor_player_id, customer_faction_id,
+		       money_reward_customer, money_reward_executor, expires_at
 		FROM contracts
 		WHERE id = $1
 		FOR UPDATE
@@ -288,9 +297,9 @@ func (h *ContractHandlerWithScheduler) CompleteContract(c *gin.Context) {
 		&contract.CustomerPlayerID,
 		&contract.ExecutorPlayerID,
 		&contract.CustomerFactionID,
-		&contract.ExpiresAt,
 		&contract.MoneyRewardCustomer,
 		&contract.MoneyRewardExecutor,
+		&contract.ExpiresAt,
 	)
 
 	if err != nil {
@@ -299,6 +308,12 @@ func (h *ContractHandlerWithScheduler) CompleteContract(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Проверяем, что это договор type1 (type2 завершается автоматически)
+	if contract.ContractType != "type1" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only type1 contracts can be completed manually"})
 		return
 	}
 
@@ -314,7 +329,7 @@ func (h *ContractHandlerWithScheduler) CompleteContract(c *gin.Context) {
 		return
 	}
 
-	// Проверяем, что срок истёк
+	// Проверяем, что договор истёк
 	now := time.Now()
 	if contract.ExpiresAt == nil || now.Before(*contract.ExpiresAt) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Contract has not expired yet"})

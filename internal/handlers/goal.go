@@ -1,4 +1,4 @@
-// internal/handlers/goal.go (версия с поддержкой unlocks)
+// internal/handlers/goal.go (версия с поддержкой unlocks и гонки целей)
 package handlers
 
 import (
@@ -19,7 +19,7 @@ func NewGoalHandler(db *sql.DB) *GoalHandler {
 	return &GoalHandler{db: db}
 }
 
-// GetPersonalGoals возвращает личные цели игрока (только видимые)
+// GetPersonalGoals возвращает личные цели игрока (только видимые и доступные)
 func (h *GoalHandler) GetPersonalGoals(c *gin.Context) {
 	playerIDInterface, exists := c.Get("player_id")
 	if !exists || playerIDInterface == nil {
@@ -34,6 +34,7 @@ func (h *GoalHandler) GetPersonalGoals(c *gin.Context) {
 	}
 
 	// Получаем видимые личные цели игрока с информацией о блокировке
+	// ВАЖНО: Исключаем цели из недоступных раундов гонки
 	rows, err := h.db.Query(`
 		SELECT 
 			g.id,
@@ -49,7 +50,11 @@ func (h *GoalHandler) GetPersonalGoals(c *gin.Context) {
 			pvg.is_locked
 		FROM goals g
 		LEFT JOIN player_visible_goals pvg ON g.id = pvg.id
-		WHERE g.goal_type = 'personal' AND g.player_id = $1
+		LEFT JOIN goal_race_round_goals grrg ON g.id = grrg.goal_id
+		WHERE g.goal_type = 'personal' 
+			AND g.player_id = $1
+			-- Исключаем цели из недоступных раундов гонки
+			AND (grrg.id IS NULL OR grrg.is_accessible = true)
 		ORDER BY g.is_completed ASC, g.created_at ASC
 	`, *playerID)
 
@@ -315,6 +320,25 @@ func (h *GoalHandler) ToggleGoalCompletion(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
+	// ВАЖНО: Проверяем, что цель не из недоступного раунда гонки
+	var isFromInaccessibleRound bool
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM goal_race_round_goals
+			WHERE goal_id = $1 AND is_accessible = false
+		)
+	`, goalID).Scan(&isFromInaccessibleRound)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check goal accessibility"})
+		return
+	}
+
+	if isFromInaccessibleRound {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This goal is from a previous race round and cannot be modified"})
+		return
+	}
 
 	// Получаем информацию о цели
 	var goal models.Goal

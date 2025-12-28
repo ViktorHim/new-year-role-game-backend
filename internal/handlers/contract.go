@@ -5,17 +5,22 @@ import (
 	"database/sql"
 	"net/http"
 	"new-year-role-game-backend/internal/models"
+	"new-year-role-game-backend/internal/workers"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type ContractHandler struct {
-	db *sql.DB
+	db        *sql.DB
+	scheduler *workers.ContractScheduler
 }
 
-func NewContractHandler(db *sql.DB) *ContractHandler {
-	return &ContractHandler{db: db}
+func NewContractHandler(db *sql.DB, scheduler *workers.ContractScheduler) *ContractHandler {
+	return &ContractHandler{
+		db:        db,
+		scheduler: scheduler,
+	}
 }
 
 // GetPlayerContracts возвращает список всех договоров игрока
@@ -33,6 +38,7 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 	}
 
 	// Получаем все договоры, где игрок - заказчик или исполнитель
+	// Для type2 договоров заказчик их не видит
 	rows, err := h.db.Query(`
 		SELECT 
 			c.id,
@@ -58,7 +64,10 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 		JOIN players customer ON c.customer_player_id = customer.id
 		JOIN players executor ON c.executor_player_id = executor.id
 		LEFT JOIN factions f ON c.customer_faction_id = f.id
-		WHERE c.customer_player_id = $1 OR c.executor_player_id = $1
+		WHERE (
+			c.executor_player_id = $1 OR 
+			(c.customer_player_id = $1 AND c.contract_type = 'type1')
+		)
 		ORDER BY 
 			CASE c.status
 				WHEN 'pending' THEN 1
@@ -124,9 +133,10 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 		}
 
 		// Определяем возможные действия
-		contract.CanSign = contract.Status == "pending" && contract.IsCustomer
+		// type2 договоры создаются сразу подписанными, так что для них CanSign всегда false
+		contract.CanSign = contract.Status == "pending" && contract.IsCustomer && contract.ContractType == "type1"
 		contract.CanComplete = contract.Status == "signed" && contract.IsCustomer &&
-			contract.ExpiresAt != nil && now.After(*contract.ExpiresAt)
+			contract.ExpiresAt != nil && now.After(*contract.ExpiresAt) && contract.ContractType == "type1"
 
 		contracts = append(contracts, contract)
 	}
@@ -180,18 +190,61 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Проверяем, что заказчик существует
+	// Проверяем лимит активных договоров этого типа для исполнителя
+	var activeContractsCount int
+	err = tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM contracts
+		WHERE executor_player_id = $1
+		  AND contract_type = $2
+		  AND status IN ('pending', 'signed')
+	`, *playerID, req.ContractType).Scan(&activeContractsCount)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check active contracts"})
+		return
+	}
+
+	if activeContractsCount >= 3 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum 3 active contracts of this type allowed"})
+		return
+	}
+
+	// Проверяем, что заказчик существует и получаем его фракцию
 	var customerExists bool
 	var customerName string
+	var customerFactionID *int
 	err = tx.QueryRow(`
 		SELECT EXISTS(SELECT 1 FROM players WHERE id = $1),
-		       COALESCE((SELECT character_name FROM players WHERE id = $1), '')
-	`, req.CustomerPlayerID).Scan(&customerExists, &customerName)
+		       COALESCE((SELECT character_name FROM players WHERE id = $1), ''),
+		       (SELECT faction_id FROM players WHERE id = $1)
+	`, req.CustomerPlayerID).Scan(&customerExists, &customerName, &customerFactionID)
 
 	if err != nil || !customerExists {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Customer player not found"})
 		return
 	}
+
+	// Получаем длительность договора из настроек администратора
+	var durationMinutes int
+	err = tx.QueryRow(`
+		SELECT duration_minutes
+		FROM contract_duration_settings
+		WHERE type = $1
+		ORDER BY id DESC
+		LIMIT 1
+	`, req.ContractType).Scan(&durationMinutes)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Contract duration not configured by admin"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch contract duration"})
+		}
+		return
+	}
+
+	durationSeconds := durationMinutes * 60
 
 	// Получаем награды из настроек администратора в зависимости от типа договора
 	var moneyRewardCustomer, moneyRewardExecutor int
@@ -225,21 +278,58 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 
 	// Создаем договор
 	var contractID int
-	err = tx.QueryRow(`
-		INSERT INTO contracts (
-			contract_type,
-			customer_player_id,
-			executor_player_id,
-			status,
-			duration_seconds,
-			money_reward_customer,
-			money_reward_executor,
-			created_at
-		)
-		VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())
-		RETURNING id
-	`, req.ContractType, req.CustomerPlayerID, *playerID, req.DurationSeconds,
-		moneyRewardCustomer, moneyRewardExecutor).Scan(&contractID)
+	var status string
+	var signedAt, expiresAt *time.Time
+
+	// Для type2 создаем договор сразу в статусе "signed"
+	if req.ContractType == "type2" {
+		status = "signed"
+		now := time.Now()
+		expires := now.Add(time.Duration(durationSeconds) * time.Second)
+		signedAt = &now
+		expiresAt = &expires
+
+		err = tx.QueryRow(`
+			INSERT INTO contracts (
+				contract_type,
+				customer_player_id,
+				executor_player_id,
+				customer_faction_id,
+				status,
+				duration_seconds,
+				money_reward_customer,
+				money_reward_executor,
+				created_at,
+				signed_at,
+				expires_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			RETURNING id
+		`, req.ContractType, req.CustomerPlayerID, *playerID, customerFactionID,
+			status, durationSeconds, moneyRewardCustomer, moneyRewardExecutor,
+			now, signedAt, expiresAt).Scan(&contractID)
+	} else {
+		// Для type1 создаем в статусе "pending"
+		status = "pending"
+		now := time.Now()
+
+		err = tx.QueryRow(`
+			INSERT INTO contracts (
+				contract_type,
+				customer_player_id,
+				executor_player_id,
+				status,
+				duration_seconds,
+				money_reward_customer,
+				money_reward_executor,
+				created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id
+		`, req.ContractType, req.CustomerPlayerID, *playerID,
+			status, durationSeconds, moneyRewardCustomer, moneyRewardExecutor,
+			now).Scan(&contractID)
+	}
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create contract"})
@@ -250,6 +340,11 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
+	}
+
+	// ВАЖНО: Для type2 создаем таймер автоматического завершения
+	if req.ContractType == "type2" && expiresAt != nil {
+		h.scheduler.ScheduleContract(contractID, *expiresAt)
 	}
 
 	// Получаем созданный договор
@@ -312,6 +407,18 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 	contract.IsExecutor = true
 	contract.CanSign = false
 	contract.CanComplete = false
+
+	// Вычисляем оставшееся время для type2 (он сразу подписан)
+	if req.ContractType == "type2" && contract.ExpiresAt != nil {
+		now := time.Now()
+		if now.Before(*contract.ExpiresAt) {
+			remaining := int(contract.ExpiresAt.Sub(now).Seconds())
+			contract.TimeRemaining = &remaining
+		} else {
+			zero := 0
+			contract.TimeRemaining = &zero
+		}
+	}
 
 	c.JSON(http.StatusCreated, contract)
 }

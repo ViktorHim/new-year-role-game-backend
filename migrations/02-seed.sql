@@ -501,8 +501,8 @@ WHERE NOT EXISTS (SELECT 1 FROM contract_penalty_settings);
 -- ВРЕМЕННАЯ МЕТКА ИГРЫ
 -- ============================================
 
--- INSERT INTO game_timeline (game_started_at) VALUES
--- (NOW() - INTERVAL '2 hours');
+INSERT INTO game_timeline (game_started_at) VALUES
+(NOW() - INTERVAL '2 hours');
 
 -- ============================================
 -- ИСТОРИЯ ИСПОЛЬЗОВАНИЯ СПОСОБНОСТЕЙ
@@ -519,6 +519,12 @@ INSERT INTO ability_usage (player_id, ability_id, target_player_id, info_categor
 INSERT INTO revealed_info (revealer_player_id, target_player_id, info_type, revealed_data, ability_usage_id) VALUES
 (1, 4, 'faction', '{"faction_name": "Мафия", "faction_id": 2}', 1),
 (12, 1, 'goal', '{"goal_title": "Укрепить королевство"}', 2);
+
+
+INSERT INTO contract_duration_settings (type, duration_minutes) 
+VALUES 
+    ('type1', 1),
+    ('type2', 1);
 
 -- ============================================
 -- ЗАВЕРШЕНИЕ

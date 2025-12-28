@@ -9,6 +9,7 @@ import (
 	"new-year-role-game-backend/internal/handlers"
 	"new-year-role-game-backend/internal/middleware"
 	"new-year-role-game-backend/internal/workers"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -86,10 +87,28 @@ func main() {
 			protected.GET("/factions", factionHandler.GetAllFactions)
 			protected.PUT("/player/faction", factionHandler.ChangeFaction)
 
+			// Goal Race Handler (создаем первым для использования в других handlers)
+			goalRaceHandler := handlers.NewGoalRaceHandler(db)
 			goalHandler := handlers.NewGoalHandler(db)
 			protected.GET("/player/goals", goalHandler.GetPersonalGoals)
 			protected.GET("/player/faction/goals", goalHandler.GetFactionGoals)
-			protected.PUT("/goals/:id/toggle", goalHandler.ToggleGoalCompletion)
+			protected.PUT("/goals/:id/toggle", func(c *gin.Context) {
+				// Вызываем оригинальный обработчик
+				goalHandler.ToggleGoalCompletion(c)
+
+				// Если цель была успешно отмечена как выполненная, проверяем раунд
+				if c.Writer.Status() == 200 {
+					playerIDInterface, _ := c.Get("player_id")
+					playerID := playerIDInterface.(*int)
+
+					goalIDStr := c.Param("id")
+					var goalID int
+					if _, err := strconv.Atoi(goalIDStr); err == nil {
+						// Проверяем завершение раунда в фоне, чтобы не блокировать ответ
+						go goalRaceHandler.CheckRoundCompletion(*playerID, goalID)
+					}
+				}
+			})
 
 			itemHandler := handlers.NewItemHandlerWithScheduler(db, effectsScheduler)
 			protected.GET("/player/inventory", itemHandler.GetPlayerInventory)
@@ -101,16 +120,25 @@ func main() {
 			protected.GET("/player/abilities", abilityHandler.GetPlayerAbilities)
 			protected.POST("/abilities/:id/use", abilityHandler.UseAbility)
 
-			contractHandler := handlers.NewContractHandler(db)
+			contractHandler := handlers.NewContractHandler(db, contractScheduler)
 			protected.GET("/player/contracts", contractHandler.GetPlayerContracts)
 			protected.POST("/contracts/create", contractHandler.CreateContract)
 			protected.POST("/contracts/:id/sign", contractsHandlerWithShedular.SignContract)
+			protected.POST("/contracts/:id/reveal", contractsHandlerWithShedular.RevealContractInfo)
 
 			// Долговые расписки с scheduler
 			debtHandler := handlers.NewDebtHandler(db, debtScheduler)
 			protected.GET("/player/debts", debtHandler.GetPlayerDebts)
 			protected.POST("/debts/create", debtHandler.CreateDebtReceipt)
 			protected.POST("/debts/:id/return", debtHandler.ReturnDebt)
+
+			// Task Handler с интеграцией гонки целей
+			taskHandler := handlers.NewTaskHandler(db, goalRaceHandler)
+			protected.GET("/player/tasks", taskHandler.GetPlayerTasks)
+			protected.PUT("/tasks/:id/toggle", taskHandler.ToggleTaskCompletion)
+
+			// Goal Race Progress
+			protected.GET("/player/race/progress", goalRaceHandler.GetPlayerRaceProgress)
 		}
 
 		// Admin endpoints - требуют роль администратора

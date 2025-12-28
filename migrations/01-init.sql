@@ -136,17 +136,6 @@ CREATE TABLE IF NOT EXISTS ability_usage (
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Ð˜ÑÑ‚Ð¾Ñ€Ð¸Ñ Ñ€Ð°ÑÐºÑ€Ñ‹Ñ‚Ð¾Ð¹ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸Ð¸
-CREATE TABLE IF NOT EXISTS revealed_info (
-    id SERIAL PRIMARY KEY,
-    revealer_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-    target_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-    info_type VARCHAR(20) NOT NULL, -- 'faction', 'goal', 'item'
-    revealed_data JSONB, -- JSON Ñ Ñ€Ð°ÑÐºÑ€Ñ‹Ñ‚Ð¾Ð¹ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸ÐµÐ¹
-    revealed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ability_usage_id INTEGER REFERENCES ability_usage(id) ON DELETE SET NULL
-);
-
 -- ============================================
 -- Ð¦Ð•Ð›Ð˜
 -- ============================================
@@ -406,6 +395,38 @@ CREATE TABLE IF NOT EXISTS contract_penalties (
     influence_penalty INTEGER DEFAULT 0,
     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS revealed_info (
+    id SERIAL PRIMARY KEY,
+    revealer_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+    target_player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+    info_type VARCHAR(20) NOT NULL, -- 'faction', 'goal', 'item'
+    revealed_data JSONB, -- JSON с раскрытой информацией
+    revealed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ability_usage_id INTEGER REFERENCES ability_usage(id) ON DELETE SET NULL,
+    contract_id INTEGER REFERENCES contracts(id) ON DELETE SET NULL,
+    
+    -- Проверка: информация должна быть связана либо с ability_usage_id, либо с contract_id
+    -- (но не одновременно с обоими и не с пустыми обоими)
+    CONSTRAINT chk_revealed_info_source 
+    CHECK (
+        (ability_usage_id IS NOT NULL AND contract_id IS NULL) OR
+        (ability_usage_id IS NULL AND contract_id IS NOT NULL)
+    )
+);
+
+-- Индексы для оптимизации
+CREATE INDEX IF NOT EXISTS idx_revealed_info_revealer 
+ON revealed_info(revealer_player_id);
+
+CREATE INDEX IF NOT EXISTS idx_revealed_info_target 
+ON revealed_info(target_player_id);
+
+CREATE INDEX IF NOT EXISTS idx_revealed_info_ability_usage 
+ON revealed_info(ability_usage_id);
+
+CREATE INDEX IF NOT EXISTS idx_revealed_info_contract_id 
+ON revealed_info(contract_id);
 
 -- ============================================
 -- Ð”ÐžÐ›Ð“ÐžÐ’Ð«Ð• Ð ÐÐ¡ÐŸÐ˜Ð¡ÐšÐ˜
