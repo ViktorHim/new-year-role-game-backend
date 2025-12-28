@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,23 +25,23 @@ func NewAdminEntitiesHandler(db *sql.DB) *AdminEntitiesHandler {
 // ============================================
 
 type FactionRequest struct {
-	Name                       string `json:"name" binding:"required"`
-	Description                string `json:"description"`
-	FactionInfluence           int    `json:"faction_influence"`
+	Name                      string `json:"name" binding:"required"`
+	Description               string `json:"description"`
+	FactionInfluence          int    `json:"faction_influence"`
 	IsCompositionVisibleToAll bool   `json:"is_composition_visible_to_all"`
-	LeaderPlayerID             *int   `json:"leader_player_id"`
+	LeaderPlayerID            *int   `json:"leader_player_id"`
 }
 
 type FactionResponse struct {
-	ID                        int       `json:"id"`
-	Name                      string    `json:"name"`
-	Description               string    `json:"description"`
-	FactionInfluence          int       `json:"faction_influence"`
-	IsCompositionVisibleToAll bool      `json:"is_composition_visible_to_all"`
-	LeaderPlayerID            *int      `json:"leader_player_id,omitempty"`
-	LeaderName                *string   `json:"leader_name,omitempty"`
-	MembersCount              int       `json:"members_count"`
-	TotalInfluence            int       `json:"total_influence"`
+	ID                        int     `json:"id"`
+	Name                      string  `json:"name"`
+	Description               string  `json:"description"`
+	FactionInfluence          int     `json:"faction_influence"`
+	IsCompositionVisibleToAll bool    `json:"is_composition_visible_to_all"`
+	LeaderPlayerID            *int    `json:"leader_player_id,omitempty"`
+	LeaderName                *string `json:"leader_name,omitempty"`
+	MembersCount              int     `json:"members_count"`
+	TotalInfluence            int     `json:"total_influence"`
 }
 
 // GetAllFactions возвращает все фракции с детальной информацией
@@ -185,8 +186,8 @@ func (h *AdminEntitiesHandler) UpdateFaction(c *gin.Context) {
 		SET name = $1, description = $2, faction_influence = $3, 
 		    is_composition_visible_to_all = $4, leader_player_id = $5
 		WHERE id = $6
-	`, req.Name, req.Description, req.FactionInfluence, req.IsCompositionVisibleToAll, 
-	   req.LeaderPlayerID, factionID)
+	`, req.Name, req.Description, req.FactionInfluence, req.IsCompositionVisibleToAll,
+		req.LeaderPlayerID, factionID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update faction"})
@@ -284,9 +285,16 @@ func (h *AdminEntitiesHandler) GetFactionMembers(c *gin.Context) {
 // ИГРОКИ (PLAYERS)
 // ============================================
 
+// ============================================
+// ПОЛНЫЙ НАБОР ИСПРАВЛЕНИЙ для admin_entities.go
+// ============================================
+
+// СТРУКТУРЫ ДЛЯ РАБОТЫ С ИГРОКАМИ
+// Заменить существующие структуры в admin_entities.go
+
+// PlayerRequest - для создания нового игрока
 type PlayerRequest struct {
 	CharacterName    string  `json:"character_name" binding:"required"`
-	Password         string  `json:"password" binding:"required"`
 	CharacterStory   string  `json:"character_story"`
 	Role             string  `json:"role" binding:"required"`
 	Money            int     `json:"money"`
@@ -294,8 +302,27 @@ type PlayerRequest struct {
 	FactionID        *int    `json:"faction_id"`
 	CanChangeFaction bool    `json:"can_change_faction"`
 	Avatar           *string `json:"avatar"`
+	// Поля для создания user
+	Username         string  `json:"username" binding:"required"` 
+	Password         string  `json:"password" binding:"required"`
 }
 
+// PlayerUpdateRequest - для обновления существующего игрока
+type PlayerUpdateRequest struct {
+	CharacterName    *string `json:"character_name"`
+	CharacterStory   *string `json:"character_story"`
+	Role             *string `json:"role"`
+	Money            *int    `json:"money"`
+	Influence        *int    `json:"influence"`
+	FactionID        *int    `json:"faction_id"`
+	CanChangeFaction *bool   `json:"can_change_faction"`
+	Avatar           *string `json:"avatar"`
+	// Опциональные поля для обновления user
+	Username         *string `json:"username"`
+	Password         *string `json:"password"`
+}
+
+// PlayerResponse - структура ответа с данными игрока и пользователя
 type PlayerResponse struct {
 	ID               int       `json:"id"`
 	CharacterName    string    `json:"character_name"`
@@ -307,17 +334,26 @@ type PlayerResponse struct {
 	FactionName      *string   `json:"faction_name,omitempty"`
 	CanChangeFaction bool      `json:"can_change_faction"`
 	Avatar           *string   `json:"avatar,omitempty"`
+	// Данные пользователя
+	UserID           *int      `json:"user_id,omitempty"`
+	Username         *string   `json:"username,omitempty"`
 }
 
-// GetAllPlayers возвращает всех игроков
+// ============================================
+// ФУНКЦИИ ДЛЯ ПОЛУЧЕНИЯ ДАННЫХ ИГРОКОВ
+// ============================================
+
+// GetAllPlayers возвращает всех игроков с данными пользователей
 func (h *AdminEntitiesHandler) GetAllPlayers(c *gin.Context) {
 	rows, err := h.db.Query(`
 		SELECT 
 			p.id, p.character_name, p.character_story, p.role, p.money, 
 			p.influence, p.faction_id, f.name as faction_name, 
-			p.can_change_faction, p.avatar
+			p.can_change_faction, p.avatar,
+			u.id as user_id, u.username
 		FROM players p
 		LEFT JOIN factions f ON p.faction_id = f.id
+		LEFT JOIN users u ON u.player_id = p.id
 		ORDER BY p.character_name
 	`)
 
@@ -341,6 +377,8 @@ func (h *AdminEntitiesHandler) GetAllPlayers(c *gin.Context) {
 			&player.FactionName,
 			&player.CanChangeFaction,
 			&player.Avatar,
+			&player.UserID,
+			&player.Username,
 		)
 
 		if err != nil {
@@ -354,7 +392,7 @@ func (h *AdminEntitiesHandler) GetAllPlayers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"players": players})
 }
 
-// GetPlayer возвращает одного игрока по ID
+// GetPlayer возвращает одного игрока по ID с данными пользователя
 func (h *AdminEntitiesHandler) GetPlayer(c *gin.Context) {
 	playerIDStr := c.Param("id")
 	playerID, err := strconv.Atoi(playerIDStr)
@@ -368,9 +406,11 @@ func (h *AdminEntitiesHandler) GetPlayer(c *gin.Context) {
 		SELECT 
 			p.id, p.character_name, p.character_story, p.role, p.money, 
 			p.influence, p.faction_id, f.name as faction_name, 
-			p.can_change_faction, p.avatar
+			p.can_change_faction, p.avatar,
+			u.id as user_id, u.username
 		FROM players p
 		LEFT JOIN factions f ON p.faction_id = f.id
+		LEFT JOIN users u ON u.player_id = p.id
 		WHERE p.id = $1
 	`, playerID).Scan(
 		&player.ID,
@@ -383,6 +423,8 @@ func (h *AdminEntitiesHandler) GetPlayer(c *gin.Context) {
 		&player.FactionName,
 		&player.CanChangeFaction,
 		&player.Avatar,
+		&player.UserID,
+		&player.Username,
 	)
 
 	if err == sql.ErrNoRows {
@@ -397,6 +439,10 @@ func (h *AdminEntitiesHandler) GetPlayer(c *gin.Context) {
 	c.JSON(http.StatusOK, player)
 }
 
+// ============================================
+// ФУНКЦИИ ДЛЯ СОЗДАНИЯ И ОБНОВЛЕНИЯ ИГРОКОВ
+// ============================================
+
 // CreatePlayer создает нового игрока и пользователя для него
 func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 	var req PlayerRequest
@@ -404,9 +450,6 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
-
-	// Генерируем username из имени персонажа (lowercase, убираем пробелы)
-	username := strings.ToLower(strings.ReplaceAll(req.CharacterName, " ", ""))
 
 	// Начинаем транзакцию
 	tx, err := h.db.Begin()
@@ -416,14 +459,22 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Создаем игрока
+	// Проверяем, существует ли уже пользователь с таким username
+	var existingUserID int
+	err = tx.QueryRow("SELECT id FROM users WHERE username = $1", req.Username).Scan(&existingUserID)
+	if err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	// Создаем игрока (БЕЗ поля password - оно только в таблице users)
 	var playerID int
 	err = tx.QueryRow(`
-		INSERT INTO players (character_name, password, character_story, role, money,
+		INSERT INTO players (character_name, character_story, role, money,
 		                     influence, faction_id, can_change_faction, avatar)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-	`, req.CharacterName, req.Password, req.CharacterStory, req.Role, req.Money,
+	`, req.CharacterName, req.CharacterStory, req.Role, req.Money,
 	   req.Influence, req.FactionID, req.CanChangeFaction, req.Avatar).Scan(&playerID)
 
 	if err != nil {
@@ -431,20 +482,11 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 		return
 	}
 
-	// Проверяем, существует ли уже пользователь с таким username
-	var existingUserID int
-	err = tx.QueryRow("SELECT id FROM users WHERE username = $1", username).Scan(&existingUserID)
-
-	// Если username занят, добавляем суффикс с ID игрока
-	if err == nil {
-		username = username + "_" + strconv.Itoa(playerID)
-	}
-
 	// Создаем пользователя для авторизации
 	_, err = tx.Exec(`
 		INSERT INTO users (username, password, player_id, is_admin)
 		VALUES ($1, $2, $3, false)
-	`, username, req.Password, playerID)
+	`, req.Username, req.Password, playerID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user account"})
@@ -460,11 +502,11 @@ func (h *AdminEntitiesHandler) CreatePlayer(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message":   "Player created successfully",
 		"player_id": playerID,
-		"username":  username,
+		"username":  req.Username,
 	})
 }
 
-// UpdatePlayer обновляет игрока и его учетную запись
+// UpdatePlayer обновляет игрока и его учетную запись (с опциональными полями)
 func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 	playerIDStr := c.Param("id")
 	playerID, err := strconv.Atoi(playerIDStr)
@@ -473,7 +515,7 @@ func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 		return
 	}
 
-	var req PlayerRequest
+	var req PlayerUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
@@ -487,36 +529,109 @@ func (h *AdminEntitiesHandler) UpdatePlayer(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Обновляем игрока
-	result, err := tx.Exec(`
-		UPDATE players
-		SET character_name = $1, password = $2, character_story = $3, role = $4,
-		    money = $5, influence = $6, faction_id = $7, can_change_faction = $8, avatar = $9
-		WHERE id = $10
-	`, req.CharacterName, req.Password, req.CharacterStory, req.Role, req.Money,
-	   req.Influence, req.FactionID, req.CanChangeFaction, req.Avatar, playerID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player"})
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
+	// Проверяем существование игрока
+	var exists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id = $1)", playerID).Scan(&exists)
+	if err != nil || !exists {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		return
 	}
 
-	// Обновляем пароль пользователя в таблице users
-	_, err = tx.Exec(`
-		UPDATE users
-		SET password = $1
-		WHERE player_id = $2
-	`, req.Password, playerID)
+	// Обновляем поля игрока (только те, что были переданы)
+	updateFields := []string{}
+	updateValues := []interface{}{}
+	paramCounter := 1
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user password"})
-		return
+	if req.CharacterName != nil {
+		updateFields = append(updateFields, fmt.Sprintf("character_name = $%d", paramCounter))
+		updateValues = append(updateValues, *req.CharacterName)
+		paramCounter++
+	}
+	if req.CharacterStory != nil {
+		updateFields = append(updateFields, fmt.Sprintf("character_story = $%d", paramCounter))
+		updateValues = append(updateValues, *req.CharacterStory)
+		paramCounter++
+	}
+	if req.Role != nil {
+		updateFields = append(updateFields, fmt.Sprintf("role = $%d", paramCounter))
+		updateValues = append(updateValues, *req.Role)
+		paramCounter++
+	}
+	if req.Money != nil {
+		updateFields = append(updateFields, fmt.Sprintf("money = $%d", paramCounter))
+		updateValues = append(updateValues, *req.Money)
+		paramCounter++
+	}
+	if req.Influence != nil {
+		updateFields = append(updateFields, fmt.Sprintf("influence = $%d", paramCounter))
+		updateValues = append(updateValues, *req.Influence)
+		paramCounter++
+	}
+	if req.FactionID != nil {
+		updateFields = append(updateFields, fmt.Sprintf("faction_id = $%d", paramCounter))
+		updateValues = append(updateValues, *req.FactionID)
+		paramCounter++
+	}
+	if req.CanChangeFaction != nil {
+		updateFields = append(updateFields, fmt.Sprintf("can_change_faction = $%d", paramCounter))
+		updateValues = append(updateValues, *req.CanChangeFaction)
+		paramCounter++
+	}
+	if req.Avatar != nil {
+		updateFields = append(updateFields, fmt.Sprintf("avatar = $%d", paramCounter))
+		updateValues = append(updateValues, *req.Avatar)
+		paramCounter++
+	}
+
+	// Если есть что обновлять в таблице players
+	if len(updateFields) > 0 {
+		updateValues = append(updateValues, playerID)
+		query := fmt.Sprintf("UPDATE players SET %s WHERE id = $%d", 
+			strings.Join(updateFields, ", "), paramCounter)
+		
+		_, err = tx.Exec(query, updateValues...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player"})
+			return
+		}
+	}
+
+	// Обновляем учетную запись пользователя (если переданы соответствующие поля)
+	userUpdateFields := []string{}
+	userUpdateValues := []interface{}{}
+	userParamCounter := 1
+
+	if req.Username != nil {
+		// Проверяем, не занят ли новый username другим пользователем
+		var existingUserID int
+		err = tx.QueryRow("SELECT id FROM users WHERE username = $1 AND player_id != $2", 
+			*req.Username, playerID).Scan(&existingUserID)
+		if err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+			return
+		}
+
+		userUpdateFields = append(userUpdateFields, fmt.Sprintf("username = $%d", userParamCounter))
+		userUpdateValues = append(userUpdateValues, *req.Username)
+		userParamCounter++
+	}
+	if req.Password != nil {
+		userUpdateFields = append(userUpdateFields, fmt.Sprintf("password = $%d", userParamCounter))
+		userUpdateValues = append(userUpdateValues, *req.Password)
+		userParamCounter++
+	}
+
+	// Если есть что обновлять в таблице users
+	if len(userUpdateFields) > 0 {
+		userUpdateValues = append(userUpdateValues, playerID)
+		userQuery := fmt.Sprintf("UPDATE users SET %s WHERE player_id = $%d", 
+			strings.Join(userUpdateFields, ", "), userParamCounter)
+		
+		_, err = tx.Exec(userQuery, userUpdateValues...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user account"})
+			return
+		}
 	}
 
 	// Коммитим транзакцию
@@ -621,27 +736,27 @@ func (h *AdminEntitiesHandler) UpdatePlayerInfluence(c *gin.Context) {
 // ============================================
 
 type GoalRequest struct {
-	Title                  string `json:"title" binding:"required"`
-	Description            string `json:"description"`
-	GoalType               string `json:"goal_type" binding:"required,oneof=personal faction"`
-	InfluencePointsReward  int    `json:"influence_points_reward"`
-	PlayerID               *int   `json:"player_id"`
-	FactionID              *int   `json:"faction_id"`
+	Title                 string `json:"title" binding:"required"`
+	Description           string `json:"description"`
+	GoalType              string `json:"goal_type" binding:"required,oneof=personal faction"`
+	InfluencePointsReward int    `json:"influence_points_reward"`
+	PlayerID              *int   `json:"player_id"`
+	FactionID             *int   `json:"faction_id"`
 }
 
 type GoalResponse struct {
-	ID                     int       `json:"id"`
-	Title                  string    `json:"title"`
-	Description            string    `json:"description"`
-	GoalType               string    `json:"goal_type"`
-	InfluencePointsReward  int       `json:"influence_points_reward"`
-	PlayerID               *int      `json:"player_id,omitempty"`
-	PlayerName             *string   `json:"player_name,omitempty"`
-	FactionID              *int      `json:"faction_id,omitempty"`
-	FactionName            *string   `json:"faction_name,omitempty"`
-	IsCompleted            bool      `json:"is_completed"`
-	CompletedAt            *time.Time `json:"completed_at,omitempty"`
-	CreatedAt              time.Time `json:"created_at"`
+	ID                    int        `json:"id"`
+	Title                 string     `json:"title"`
+	Description           string     `json:"description"`
+	GoalType              string     `json:"goal_type"`
+	InfluencePointsReward int        `json:"influence_points_reward"`
+	PlayerID              *int       `json:"player_id,omitempty"`
+	PlayerName            *string    `json:"player_name,omitempty"`
+	FactionID             *int       `json:"faction_id,omitempty"`
+	FactionName           *string    `json:"faction_name,omitempty"`
+	IsCompleted           bool       `json:"is_completed"`
+	CompletedAt           *time.Time `json:"completed_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
 }
 
 // GetAllGoals возвращает все цели
