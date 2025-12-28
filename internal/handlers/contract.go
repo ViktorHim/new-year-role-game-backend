@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"new-year-role-game-backend/internal/models"
 	"new-year-role-game-backend/internal/workers"
@@ -39,6 +40,7 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 
 	// Получаем все договоры, где игрок - заказчик или исполнитель
 	// Для type2 договоров заказчик их не видит
+	// Для type2 добавляем информацию о раскрытом факте (если есть)
 	rows, err := h.db.Query(`
 		SELECT 
 			c.id,
@@ -59,11 +61,15 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 			c.signed_at,
 			c.expires_at,
 			c.completed_at,
-			c.terminated_at
+			c.terminated_at,
+			ri.info_type,
+			ri.revealed_data,
+			ri.revealed_at
 		FROM contracts c
 		JOIN players customer ON c.customer_player_id = customer.id
 		JOIN players executor ON c.executor_player_id = executor.id
 		LEFT JOIN factions f ON c.customer_faction_id = f.id
+		LEFT JOIN revealed_info ri ON c.id = ri.contract_id AND c.contract_type = 'type2'
 		WHERE (
 			c.executor_player_id = $1 OR 
 			(c.customer_player_id = $1 AND c.contract_type = 'type1')
@@ -89,6 +95,9 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 
 	for rows.Next() {
 		var contract models.Contract
+		var revealedInfoType *string
+		var revealedData *[]byte
+		var revealedAt *time.Time
 
 		err := rows.Scan(
 			&contract.ID,
@@ -110,6 +119,9 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 			&contract.ExpiresAt,
 			&contract.CompletedAt,
 			&contract.TerminatedAt,
+			&revealedInfoType,
+			&revealedData,
+			&revealedAt,
 		)
 
 		if err != nil {
@@ -137,6 +149,28 @@ func (h *ContractHandler) GetPlayerContracts(c *gin.Context) {
 		contract.CanSign = contract.Status == "pending" && contract.IsCustomer && contract.ContractType == "type1"
 		contract.CanComplete = contract.Status == "signed" && contract.IsCustomer &&
 			contract.ExpiresAt != nil && now.After(*contract.ExpiresAt) && contract.ContractType == "type1"
+
+		// Для type2 договоров добавляем информацию о раскрытом факте
+		// info_revealed всегда установлен в true или false
+		// Дополнительные поля (revealed_info_type, revealed_info_data, revealed_at) присутствуют только если info_revealed = true
+		if contract.ContractType == "type2" {
+			if revealedInfoType != nil && revealedData != nil {
+				// Факт был раскрыт
+				contract.InfoRevealed = true
+				contract.RevealedInfoType = revealedInfoType
+
+				// Парсим JSON данные
+				var data map[string]interface{}
+				if err := json.Unmarshal(*revealedData, &data); err == nil {
+					contract.RevealedInfoData = data
+				}
+
+				contract.RevealedAt = revealedAt
+			} else {
+				// Факт еще не раскрыт
+				contract.InfoRevealed = false
+			}
+		}
 
 		contracts = append(contracts, contract)
 	}

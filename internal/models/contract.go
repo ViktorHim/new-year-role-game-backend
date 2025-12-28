@@ -3,9 +3,11 @@ package models
 
 import "time"
 
+// Contract - структура договора
 type Contract struct {
+	// Базовые поля
 	ID                   int        `json:"id"`
-	ContractType         string     `json:"contract_type"` // 'type1', 'type2'
+	ContractType         string     `json:"contract_type"`
 	CustomerPlayerID     int        `json:"customer_player_id"`
 	CustomerPlayerName   string     `json:"customer_player_name"`
 	CustomerPlayerAvatar *string    `json:"customer_player_avatar"`
@@ -14,22 +16,30 @@ type Contract struct {
 	ExecutorPlayerAvatar *string    `json:"executor_player_avatar"`
 	CustomerFactionID    *int       `json:"customer_faction_id"`
 	CustomerFactionName  *string    `json:"customer_faction_name"`
-	Status               string     `json:"status"` // 'pending', 'signed', 'completed', 'terminated'
+	Status               string     `json:"status"`
 	DurationSeconds      int        `json:"duration_seconds"`
 	MoneyRewardCustomer  int        `json:"money_reward_customer"`
 	MoneyRewardExecutor  int        `json:"money_reward_executor"`
 	CreatedAt            time.Time  `json:"created_at"`
-	SignedAt             *time.Time `json:"signed_at,omitempty"`
-	ExpiresAt            *time.Time `json:"expires_at,omitempty"`
-	CompletedAt          *time.Time `json:"completed_at,omitempty"`
-	TerminatedAt         *time.Time `json:"terminated_at,omitempty"`
+	SignedAt             *time.Time `json:"signed_at"`
+	ExpiresAt            *time.Time `json:"expires_at"`
+	CompletedAt          *time.Time `json:"completed_at"`
+	TerminatedAt         *time.Time `json:"terminated_at"`
 
-	// Дополнительные поля для удобства клиента
-	IsCustomer    bool `json:"is_customer"`              // true если текущий игрок - заказчик
-	IsExecutor    bool `json:"is_executor"`              // true если текущий игрок - исполнитель
-	TimeRemaining *int `json:"time_remaining,omitempty"` // секунды до истечения (для signed)
-	CanSign       bool `json:"can_sign"`                 // можно ли подписать (для pending)
-	CanComplete   bool `json:"can_complete"`             // можно ли завершить (для signed)
+	// Вычисляемые поля
+	IsCustomer    bool `json:"is_customer"`
+	IsExecutor    bool `json:"is_executor"`
+	TimeRemaining *int `json:"time_remaining,omitempty"`
+
+	// Возможные действия
+	CanSign     bool `json:"can_sign"`
+	CanComplete bool `json:"can_complete"`
+
+	// Раскрытая информация (для type2)
+	InfoRevealed     bool                   `json:"info_revealed"`                // Был ли раскрыт факт
+	RevealedInfoType *string                `json:"revealed_info_type,omitempty"` // "faction", "goal", "item"
+	RevealedInfoData map[string]interface{} `json:"revealed_info_data,omitempty"` // Данные раскрытой информации
+	RevealedAt       *time.Time             `json:"revealed_at,omitempty"`        // Когда был раскрыт
 }
 
 type ContractsResponse struct {
@@ -39,7 +49,7 @@ type ContractsResponse struct {
 type CreateContractRequest struct {
 	ContractType     string `json:"contract_type" binding:"required"` // 'type1' или 'type2'
 	CustomerPlayerID int    `json:"customer_player_id" binding:"required"`
-	DurationSeconds  int    `json:"duration_seconds" binding:"required,min=60"` // минимум 1 минута
+	//DurationSeconds  int    `json:"duration_seconds" binding:"required,min=60"` // минимум 1 минута
 }
 
 type SignContractRequest struct {
