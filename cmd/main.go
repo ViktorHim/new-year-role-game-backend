@@ -146,21 +146,162 @@ func main() {
 		admin.Use(middleware.AuthMiddleware(cfg.JWTKey))
 		admin.Use(middleware.AdminMiddleware())
 		{
+			// ========================================
+			// УПРАВЛЕНИЕ ИГРОЙ
+			// ========================================
 			adminHandler := handlers.NewAdminHandler(db, effectsScheduler, contractScheduler)
 			admin.POST("/game/start", adminHandler.StartGame)
 			admin.POST("/game/end", adminHandler.EndGame)
+			admin.GET("/game/stats", adminHandler.GetGameStats)
 
+			// ========================================
+			// ФРАКЦИИ
+			// ========================================
+			adminEntitiesHandler := handlers.NewAdminEntitiesHandler(db)
+			admin.GET("/factions", adminEntitiesHandler.GetAllFactions)
+			admin.GET("/factions/:id", adminEntitiesHandler.GetFaction)
+			admin.POST("/factions", adminEntitiesHandler.CreateFaction)
+			admin.PUT("/factions/:id", adminEntitiesHandler.UpdateFaction)
+			admin.DELETE("/factions/:id", adminEntitiesHandler.DeleteFaction)
+			admin.GET("/factions/:id/members", adminEntitiesHandler.GetFactionMembers)
+
+			// ========================================
+			// ИГРОКИ
+			// ========================================
+			admin.GET("/players", adminEntitiesHandler.GetAllPlayers)
+			admin.GET("/players/:id", adminEntitiesHandler.GetPlayer)
+			admin.POST("/players", adminEntitiesHandler.CreatePlayer)
+			admin.PUT("/players/:id", adminEntitiesHandler.UpdatePlayer)
+			admin.DELETE("/players/:id", adminEntitiesHandler.DeletePlayer)
+			admin.PUT("/players/:id/money", adminEntitiesHandler.UpdatePlayerMoney)
+			admin.PUT("/players/:id/influence", adminEntitiesHandler.UpdatePlayerInfluence)
+
+			// ========================================
+			// ЦЕЛИ
+			// ========================================
+			admin.GET("/goals", adminEntitiesHandler.GetAllGoals)
+			admin.POST("/goals", adminEntitiesHandler.CreateGoal)
+			admin.POST("/goals/batch", adminEntitiesHandler.CreateBatchGoals)
+			admin.PUT("/goals/:id", adminEntitiesHandler.UpdateGoal)
+			admin.DELETE("/goals/:id", adminEntitiesHandler.DeleteGoal)
+
+			// ========================================
+			// ЗАДАЧИ
+			// ========================================
+			adminItemsTasksHandler := handlers.NewAdminItemsTasksHandler(db)
+			admin.GET("/tasks", adminItemsTasksHandler.GetAllTasks)
+			admin.POST("/tasks", adminItemsTasksHandler.CreateTask)
+			admin.PUT("/tasks/:id", adminItemsTasksHandler.UpdateTask)
+			admin.DELETE("/tasks/:id", adminItemsTasksHandler.DeleteTask)
+
+			// ========================================
+			// ПРЕДМЕТЫ И ЭФФЕКТЫ
+			// ========================================
+			admin.GET("/items", adminItemsTasksHandler.GetAllItems)
+			admin.GET("/items/:id", adminItemsTasksHandler.GetItem)
+			admin.POST("/items", adminItemsTasksHandler.CreateItem)
+			admin.PUT("/items/:id", adminItemsTasksHandler.UpdateItem)
+			admin.DELETE("/items/:id", adminItemsTasksHandler.DeleteItem)
+			admin.POST("/effects", adminItemsTasksHandler.CreateEffect)
+			admin.POST("/items/:id/effects", adminItemsTasksHandler.AddEffectToItem)
+			admin.DELETE("/items/:id/effects/:effect_id", adminItemsTasksHandler.RemoveEffectFromItem)
+
+			// ========================================
+			// СПОСОБНОСТИ
+			// ========================================
+			admin.GET("/abilities", adminItemsTasksHandler.GetAllAbilities)
+			admin.POST("/abilities", adminItemsTasksHandler.CreateAbility)
+			admin.PUT("/abilities/:id", adminItemsTasksHandler.UpdateAbility)
+			admin.DELETE("/abilities/:id", adminItemsTasksHandler.DeleteAbility)
+
+			// ========================================
+			// КОНТРАКТЫ
+			// ========================================
+			adminMonitoringHandler := handlers.NewAdminMonitoringHandler(db)
+			admin.GET("/contracts", adminMonitoringHandler.GetAllContracts)
+			admin.GET("/contracts/:id", adminMonitoringHandler.GetContract)
+			admin.DELETE("/contracts/:id/terminate", contractsHandlerWithShedular.TerminateContract)
+
+			// Настройки контрактов (уже существуют)
 			adminContractHandler := handlers.NewAdminContractHandler(db)
 			admin.GET("/contracts/settings", adminContractHandler.GetContractSettings)
 			admin.PUT("/contracts/type1/rewards", adminContractHandler.UpdateContractType1Rewards)
 			admin.PUT("/contracts/type2/rewards", adminContractHandler.UpdateContractType2Rewards)
 			admin.PUT("/contracts/penalties", adminContractHandler.UpdateContractPenalties)
-			admin.DELETE("/contracts/:id/terminate", contractsHandlerWithShedular.TerminateContract)
 
-			// Настройки долговых расписок
+			// Type1 награды по фракциям
+			admin.GET("/contracts/type1/faction-rewards", adminMonitoringHandler.GetType1FactionRewards)
+			admin.POST("/contracts/type1/faction-rewards", adminMonitoringHandler.SetType1FactionReward)
+			admin.DELETE("/contracts/type1/faction-rewards/:faction_id", adminMonitoringHandler.DeleteType1FactionReward)
+
+			// ========================================
+			// ДОЛГИ
+			// ========================================
+			admin.GET("/debts", adminMonitoringHandler.GetAllDebts)
+			admin.GET("/debts/:id", adminMonitoringHandler.GetDebt)
+			admin.DELETE("/debts/:id", adminMonitoringHandler.DeleteDebt)
+
+			// Настройки долгов (уже существуют)
 			adminDebtHandler := handlers.NewAdminDebtHandler(db)
 			admin.GET("/debts/settings", adminDebtHandler.GetDebtPenaltySettings)
 			admin.PUT("/debts/penalties", adminDebtHandler.UpdateDebtPenaltySettings)
+
+			// ========================================
+			// ГОНКА ЦЕЛЕЙ
+			// ========================================
+			adminGoalRaceHandler := handlers.NewAdminGoalRaceHandler(db)
+			admin.GET("/goal-race/triggers", adminGoalRaceHandler.GetTriggers)
+			admin.POST("/goal-race/triggers", adminGoalRaceHandler.CreateTrigger)
+			admin.PUT("/goal-race/triggers/:id", adminGoalRaceHandler.UpdateTrigger)
+			admin.DELETE("/goal-race/triggers/:id", adminGoalRaceHandler.DeleteTrigger)
+
+			admin.GET("/goal-race/predefined-goals", adminGoalRaceHandler.GetPredefinedGoals)
+			admin.POST("/goal-race/predefined-goals", adminGoalRaceHandler.CreatePredefinedGoal)
+			admin.POST("/goal-race/predefined-goals/batch", adminGoalRaceHandler.CreateBatchPredefinedGoals)
+			admin.PUT("/goal-race/predefined-goals/:id", adminGoalRaceHandler.UpdatePredefinedGoal)
+			admin.DELETE("/goal-race/predefined-goals/:id", adminGoalRaceHandler.DeletePredefinedGoal)
+
+			admin.GET("/goal-race/history", adminGoalRaceHandler.GetRaceHistory)
+
+			// ========================================
+			// МОНИТОРИНГ И ТРАНЗАКЦИИ
+			// ========================================
+			admin.GET("/transactions", adminMonitoringHandler.GetTransactions)
+
+			// ========================================
+			// СВЯЗИ И ЗАВИСИМОСТИ
+			// ========================================
+			adminRelationsHandler := handlers.NewAdminRelationsHandler(db)
+
+			// Инвентарь игроков
+			admin.GET("/players/:id/inventory", adminRelationsHandler.GetPlayerInventory)
+			admin.POST("/players/:id/inventory", adminRelationsHandler.AddItemToPlayer)
+			admin.POST("/players/:id/inventory/batch", adminRelationsHandler.AddBatchItemsToPlayer)
+			admin.DELETE("/players/:id/inventory/:item_id", adminRelationsHandler.RemoveItemFromPlayer)
+
+			// Зависимости целей
+			admin.GET("/goals/:id/dependencies", adminRelationsHandler.GetGoalDependencies)
+			admin.POST("/goals/:id/dependencies", adminRelationsHandler.AddGoalDependency)
+			admin.DELETE("/goals/:id/dependencies/:dependency_id", adminRelationsHandler.DeleteGoalDependency)
+			admin.GET("/goals/:id/dependency-unlocks", adminRelationsHandler.GetGoalDependencyUnlocks)
+
+			// Информация о других игроках
+			admin.GET("/players/:id/info", adminRelationsHandler.GetPlayerInfo)
+			admin.POST("/players/:id/info", adminRelationsHandler.CreatePlayerInfo)
+			admin.PUT("/players/:id/info", adminRelationsHandler.UpdatePlayerInfo)
+			admin.DELETE("/players/:id/info", adminRelationsHandler.DeletePlayerInfo)
+
+			// Участники триггеров гонки целей
+			admin.GET("/goal-race/triggers/:id/participants", adminRelationsHandler.GetTriggerParticipants)
+			admin.POST("/goal-race/triggers/:id/participants", adminRelationsHandler.AddTriggerParticipant)
+			admin.POST("/goal-race/triggers/:id/participants/batch", adminRelationsHandler.AddBatchTriggerParticipants)
+			admin.DELETE("/goal-race/triggers/:id/participants/:player_id", adminRelationsHandler.RemoveTriggerParticipant)
+
+			// История и мониторинг
+			admin.GET("/abilities/usage-history", adminRelationsHandler.GetAbilityUsageHistory)
+			admin.GET("/players/:id/revealed-info", adminRelationsHandler.GetPlayerRevealedInfo)
+			admin.GET("/goal-race/rounds/:id/participants", adminRelationsHandler.GetRoundParticipants)
+			admin.GET("/goal-race/rounds/:id/goals", adminRelationsHandler.GetRoundGoals)
 		}
 	}
 
