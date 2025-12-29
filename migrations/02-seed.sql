@@ -698,7 +698,7 @@ INSERT INTO goals (title, description, goal_type, influence_points_reward, playe
 (3, 'Быть по уши влюбленным в своего мальчика, исполнив его ЛЮБУЮ просьбу', 'personal', 10, 19, false),
 (4, 'Сливать информацию генералу (если хотите играть за королевство)', 'personal', 10, 19, false),
 (5, 'Провести 2 игры в бильярд (можно сократить время партии)', 'personal', 10, 19, false),
-(6, 'Безвозвратно принимает омерту и работает на мафию (если хотите играть за мафию)', 'personal', 10, 19, false),
+(6, 'Безвозвратно принимает омерту и работает на мафию (если хотите играть за мафию)', 'personal', 10, 19, false),`
 (7, 'Личная победа: остаться на выигрышной стороне', 'personal', 10, 19, false);
 -- Player ID 20.0
 INSERT INTO goals (title, description, goal_type, influence_points_reward, player_id, is_completed) VALUES

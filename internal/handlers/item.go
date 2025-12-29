@@ -196,6 +196,7 @@ func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 		SELECT EXISTS(
 			SELECT 1 FROM player_items 
 			WHERE player_id = $1 AND item_id = $2
+			LIMIT 1
 		)
 	`, *playerID, req.ItemID).Scan(&hasItem)
 
@@ -235,7 +236,6 @@ func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 	_, err = tx.Exec(`
 		INSERT INTO player_items (player_id, item_id)
 		VALUES ($1, $2)
-		ON CONFLICT (player_id, item_id) DO NOTHING
 	`, req.ToPlayerID, req.ItemID)
 
 	if err != nil {
