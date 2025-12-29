@@ -231,7 +231,6 @@ func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 			SELECT ctid
 			FROM player_items
 			WHERE player_id = $1 AND item_id = $2
-			ORDER BY acquired_at
 			LIMIT 1
 		)
 	`, *playerID, req.ItemID)
