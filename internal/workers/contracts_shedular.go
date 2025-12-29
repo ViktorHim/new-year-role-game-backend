@@ -273,7 +273,6 @@ func (s *ContractScheduler) distributeRewards(tx *sql.Tx, contractID int, contra
 				_, err = tx.Exec(`
 					INSERT INTO player_items (player_id, item_id)
 					VALUES ($1, $2)
-					ON CONFLICT (player_id, item_id) DO NOTHING
 				`, contract.CustomerPlayerID, *itemID)
 				if err != nil {
 					return fmt.Errorf("failed to give item to customer: %w", err)
