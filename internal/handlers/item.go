@@ -196,7 +196,6 @@ func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 		SELECT EXISTS(
 			SELECT 1 FROM player_items 
 			WHERE player_id = $1 AND item_id = $2
-			LIMIT 1
 		)
 	`, *playerID, req.ItemID).Scan(&hasItem)
 
@@ -222,9 +221,19 @@ func (h *ItemHandlerWithScheduler) TransferItem(c *gin.Context) {
 	}
 
 	// Удаляем предмет у отправителя
+	// _, err = tx.Exec(`
+	// 	DELETE FROM player_items
+	// 	WHERE player_id = $1 AND item_id = $2
+	// `, *playerID, req.ItemID)
 	_, err = tx.Exec(`
-		DELETE FROM player_items 
-		WHERE player_id = $1 AND item_id = $2
+		DELETE FROM player_items
+		WHERE ctid IN (
+			SELECT ctid
+			FROM player_items
+			WHERE player_id = $1 AND item_id = $2
+			ORDER BY acquired_at
+			LIMIT 1
+		)
 	`, *playerID, req.ItemID)
 
 	if err != nil {
