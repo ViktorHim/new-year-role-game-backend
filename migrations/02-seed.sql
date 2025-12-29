@@ -421,13 +421,12 @@ INSERT INTO info_about_other_players (player_id, description) VALUES
 -- ====================================================================================
 INSERT INTO items (name, description) VALUES
 ('Лекарство', 'Часть лекартсва от тяжелой болезни'),
-('Семена', 'Обменять у мастера на букет (время прорастания семян 20 мин)'),
+('Семена', 'Если Вы - хозяин порта, то это просто лежит у Вас на складе. Если Вы - купец, то обменять у мастера на букет (время прорастания семян 20-30 мин)'),
 ('Чай', NULL),
 ('Контрабанда', NULL),
 ('Ордер на арест', 'Генерал имеет полное право арестовать Вас'),
 ('Ордер на осмотр территории', 'Генерал имеет полное право на осмотр помещения'),
-('Крест', 'Приносит +5 ОВ')
-; 
+('Крест', 'Приносит +5 ОВ очень верующему человеку (подтвердить наличие у мастера)'); 
 
 -- ====================================================================================
 
@@ -473,12 +472,19 @@ INSERT INTO items (name, description) VALUES
 
 -- ====================================================================================
 INSERT INTO player_items (player_id, item_id) VALUES
-(7, 5),
 (21, 1),
-(15, 2),
+(14, 5),
+(14, 5),
 (14, 6),
-(14, 7),
-(15, 8)
+(14, 6),
+(15, 7), 
+(21, 2),
+(21, 2),
+(21, 2),
+(21, 2),
+(21, 2),
+(21, 2),
+(21, 2)
 ;
 -- ====================================================================================
 
@@ -692,7 +698,7 @@ INSERT INTO goals (title, description, goal_type, influence_points_reward, playe
 (3, 'Быть по уши влюбленным в своего мальчика, исполнив его ЛЮБУЮ просьбу', 'personal', 10, 19, false),
 (4, 'Сливать информацию генералу (если хотите играть за королевство)', 'personal', 10, 19, false),
 (5, 'Провести 2 игры в бильярд (можно сократить время партии)', 'personal', 10, 19, false),
-(6, 'Безвозвратно принимает омерту и работает на мафию (если хотите играть за мафию)', 'personal', 10, 19, false);
+(6, 'Безвозвратно принимает омерту и работает на мафию (если хотите играть за мафию)', 'personal', 10, 19, false),
 (7, 'Личная победа: остаться на выигрышной стороне', 'personal', 10, 19, false);
 -- Player ID 20.0
 INSERT INTO goals (title, description, goal_type, influence_points_reward, player_id, is_completed) VALUES
@@ -817,9 +823,9 @@ INSERT INTO goals (title, description, goal_type, influence_points_reward, playe
 -- customer_item_reward_id - предмет
 
 -- ====================================================================================
--- INSERT INTO contract_type1_settings (faction_id, customer_item_reward_id) VALUES
--- ();
-
+INSERT INTO contract_type1_settings (faction_id, customer_item_reward_id) VALUES
+(1, 3),
+(2, 4);
 -- ====================================================================================
 
 -- ШТРАФЫ ЗА ДОГОВОРЫ не надо
@@ -828,8 +834,8 @@ INSERT INTO goals (title, description, goal_type, influence_points_reward, playe
 -- influence_penalty - штраф в ОВы  
 
 -- ====================================================================================
--- INSERT INTO contract_penalty_settings (money_penalty, influence_penalty) VALUES
--- ();
+INSERT INTO contract_penalty_settings (money_penalty, influence_penalty) VALUES
+(300, 5);
 
 -- ====================================================================================
 
@@ -841,8 +847,8 @@ INSERT INTO goals (title, description, goal_type, influence_points_reward, playe
 -- duration_minutes - время (В МИНУТАХ)
 -- ====================================================================================
 INSERT INTO contract_duration_settings (type, duration_minutes) VALUES
-('type1', 30),
-('type2', 30);
+('type1', 1),
+('type2', 1);
 
 -- ====================================================================================
 
@@ -850,7 +856,7 @@ INSERT INTO contract_duration_settings (type, duration_minutes) VALUES
 
 -- ====================================================================================
 INSERT INTO contract_type1_reward_settings (money_reward_customer, money_reward_executor)
-VALUES (200, 150)
+VALUES (300, 500)
 ON CONFLICT DO NOTHING;
 
 -- ====================================================================================

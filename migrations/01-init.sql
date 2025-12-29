@@ -75,8 +75,7 @@ CREATE TABLE IF NOT EXISTS player_items (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
     item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
-    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(player_id, item_id)
+    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ÐžÑ‚ÑÐ»ÐµÐ¶Ð¸Ð²Ð°Ð½Ð¸Ðµ Ð¿Ð¾ÑÐ»ÐµÐ´Ð½ÐµÐ³Ð¾ Ð²Ñ‹Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ñ ÑÑ„Ñ„ÐµÐºÑ‚Ð¾Ð² Ð²ÐµÑ‰ÐµÐ¹
